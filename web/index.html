@@ -1,0 +1,2228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mini Docker — Container Orchestration Dashboard</title>
+<meta name="description" content="Interactive web dashboard for the Mini Docker container orchestration system. Visualize OS concepts: namespaces, cgroups, Banker's algorithm, disk scheduling."/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   DESIGN TOKENS — Warm Sunrise Palette
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --salmon:  #FF9A86;
+  --peach:   #FFB399;
+  --apricot: #FFD6A6;
+  --cream:   #FFF0BE;
+
+  --bg:      #FFFBF5;
+  --surface: #FFFFFF;
+  --surface2: rgba(255,255,255,0.80);
+
+  --border:  rgba(255, 179, 153, 0.35);
+  --border-strong: rgba(255, 154, 134, 0.50);
+
+  --text-primary:   #2C1006;
+  --text-secondary: #7A3E28;
+  --text-muted:     #B06040;
+  --text-on-accent: #FFFFFF;
+
+  --success: #2D9A4E;
+  --danger:  #D94F35;
+  --warning: #E8942A;
+
+  --gradient-warm:    linear-gradient(135deg, #FF9A86 0%, #FFB399 40%, #FFD6A6 75%, #FFF0BE 100%);
+  --gradient-header:  linear-gradient(90deg,  #FF9A86 0%, #FFB399 45%, #FFD6A6 80%, #FFF0BE 100%);
+  --gradient-sidebar: linear-gradient(180deg, rgba(255,154,134,0.18) 0%, rgba(255,240,190,0.10) 100%);
+
+  --shadow-sm:  0 2px  8px rgba(255,120,80,0.10);
+  --shadow-md:  0 4px 16px rgba(255,120,80,0.14);
+  --shadow-lg:  0 8px 32px rgba(255,120,80,0.18);
+  --shadow-xl:  0 16px 48px rgba(255,120,80,0.22);
+
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --radius-xl:  24px;
+  --radius-full: 999px;
+
+  --sidebar-w: 240px;
+  --topbar-h:  58px;
+  --transition: 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════ */
+#app { display: flex; height: 100vh; overflow: hidden; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--gradient-sidebar);
+  backdrop-filter: blur(24px);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow-y: auto;
+  z-index: 10;
+}
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-logo .logo-icon {
+  width: 36px; height: 36px;
+  background: var(--gradient-warm);
+  border-radius: 10px;
+  display: grid; place-items: center;
+  font-size: 18px;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+.sidebar-logo .logo-text { font-weight: 700; font-size: 15px; color: var(--text-primary); line-height: 1.2; }
+.sidebar-logo .logo-sub  { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+
+.sidebar-section { padding: 16px 12px 6px; }
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 0 8px;
+  margin-bottom: 6px;
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  color: var(--text-secondary);
+  font-weight: 500; font-size: 13px;
+  user-select: none;
+  margin-bottom: 2px;
+  position: relative;
+}
+.nav-item:hover { background: rgba(255,154,134,0.12); color: var(--text-primary); }
+.nav-item.active {
+  background: var(--salmon);
+  color: white;
+  box-shadow: 0 4px 14px rgba(255,154,134,0.40);
+}
+.nav-item.active .nav-badge { background: rgba(255,255,255,0.25); color: white; }
+.nav-icon { font-size: 15px; flex-shrink: 0; width: 20px; text-align: center; }
+.nav-label { flex: 1; }
+.nav-badge {
+  font-size: 10px; font-weight: 600;
+  background: var(--apricot);
+  color: var(--text-secondary);
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+.nav-status {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.nav-status.ok    { background: var(--success); box-shadow: 0 0 6px rgba(45,154,78,0.6); }
+.nav-status.error { background: var(--danger); }
+.nav-status.idle  { background: var(--apricot); }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 14px;
+  border-top: 1px solid var(--border);
+}
+.btn-run-all {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  padding: 10px;
+  background: var(--gradient-warm);
+  border: none; border-radius: var(--radius-md);
+  font-family: 'Inter', sans-serif;
+  font-weight: 600; font-size: 13px;
+  color: white;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+.btn-run-all:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+
+/* ── Main area ── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Topbar ── */
+.topbar {
+  height: var(--topbar-h);
+  min-height: var(--topbar-h);
+  background: var(--gradient-header);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255,154,134,0.25);
+}
+.topbar-title {
+  font-weight: 800;
+  font-size: 17px;
+  color: white;
+  text-shadow: 0 1px 3px rgba(100,40,20,0.20);
+}
+.topbar-sub {
+  font-size: 12px;
+  color: rgba(255,255,255,0.80);
+  font-weight: 400;
+}
+.topbar-chips { display: flex; gap: 8px; margin-left: auto; }
+.chip {
+  font-size: 11px; font-weight: 600;
+  padding: 4px 10px;
+  background: rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: var(--radius-full);
+  color: white;
+  backdropFilter: blur(8px);
+}
+
+/* ── Content area ── */
+.content-area {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Pages ── */
+.page { display: none; flex: 1; overflow: hidden; }
+.page.active { display: flex; flex-direction: column; }
+
+/* ═══════════════════════════════════════════════════════════════
+   OVERVIEW PAGE
+   ═══════════════════════════════════════════════════════════════ */
+#page-overview {
+  overflow-y: auto;
+  padding: 28px;
+  flex-direction: column;
+}
+.overview-hero {
+  text-align: center;
+  padding: 40px 0 32px;
+}
+.overview-hero h1 {
+  font-size: 36px; font-weight: 800;
+  background: var(--gradient-warm);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 10px;
+}
+.overview-hero p { color: var(--text-secondary); font-size: 15px; max-width: 480px; margin: 0 auto; }
+
+.roles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin-top: 8px;
+}
+.role-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+.role-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--role-color, var(--salmon));
+}
+.role-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-strong);
+}
+.role-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.role-card-icon {
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  background: var(--role-bg, rgba(255,154,134,0.12));
+  display: grid; place-items: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.role-card-title { font-weight: 700; font-size: 15px; color: var(--text-primary); }
+.role-card-subtitle { font-size: 11px; color: var(--text-muted); }
+.role-card-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.role-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.tag {
+  font-size: 10px; font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: var(--role-bg, rgba(255,154,134,0.12));
+  color: var(--text-secondary);
+}
+.role-card-btn {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 16px;
+  color: var(--role-color, var(--salmon));
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+}
+.role-card-status {
+  position: absolute; top: 18px; right: 18px;
+  font-size: 10px; font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+}
+.status-ready   { background: rgba(45,154,78,0.12); color: var(--success); }
+.status-missing { background: rgba(217,79,53,0.10); color: var(--danger); }
+
+/* ═══════════════════════════════════════════════════════════════
+   ROLE PAGES (split pane)
+   ═══════════════════════════════════════════════════════════════ */
+.role-page { flex-direction: row; }
+
+.role-controls {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  width: 100%;
+}
+.role-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: var(--role-bg);
+  border: 1px solid rgba(0,0,0,0.06);
+}
+.role-badge-num {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--role-color);
+  color: white;
+  font-size: 11px; font-weight: 700;
+  display: grid; place-items: center;
+}
+.role-badge-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
+.role-controls-info { flex: 1; font-size: 12px; color: var(--text-muted); }
+
+.btn-run {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 22px;
+  background: var(--role-color, var(--salmon));
+  color: white; border: none;
+  border-radius: var(--radius-full);
+  font-family: 'Inter', sans-serif;
+  font-weight: 600; font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 3px 12px rgba(255,100,70,0.30);
+}
+.btn-run:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(255,100,70,0.40); }
+.btn-run:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.btn-run.running { animation: pulse 1.8s ease infinite; }
+@keyframes pulse {
+  0%,100% { box-shadow: 0 3px 12px rgba(255,100,70,0.30); }
+  50%      { box-shadow: 0 3px 24px rgba(255,100,70,0.55); }
+}
+
+.btn-reset {
+  padding: 9px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-family: 'Inter', sans-serif;
+  font-weight: 500; font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.btn-reset:hover { background: rgba(255,154,134,0.08); border-color: var(--salmon); color: var(--salmon); }
+
+/* ── Split pane ── */
+.split-pane {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+.terminal-pane {
+  width: 44%;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: #FFF8EF;
+}
+.terminal-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: rgba(255,214,166,0.25);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.term-dots { display: flex; gap: 6px; }
+.term-dot { width: 10px; height: 10px; border-radius: 50%; }
+.term-dot:nth-child(1) { background: var(--danger); }
+.term-dot:nth-child(2) { background: var(--warning); }
+.term-dot:nth-child(3) { background: var(--success); }
+
+[id^="terminal-output"] {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+[id^="terminal-output"]::-webkit-scrollbar { width: 6px; }
+[id^="terminal-output"]::-webkit-scrollbar-thumb { background: var(--apricot); border-radius: 3px; }
+
+.term-line { display: block; }
+.term-pass  { color: #2D9A4E; font-weight: 500; }
+.term-fail  { color: #D94F35; font-weight: 500; }
+.term-warn  { color: #E8942A; }
+.term-info  { color: #FF9A86; font-weight: 500; }
+.term-head  { color: #7A3E28; font-weight: 600; }
+.term-dim   { color: #B06040; }
+.term-error { color: #D94F35; background: rgba(217,79,53,0.08); padding: 2px 6px; border-radius: 4px; }
+.term-done  { color: var(--success); font-weight: 700; }
+
+/* ── Visualization pane ── */
+.viz-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 20px;
+  gap: 16px;
+  background: var(--bg);
+}
+.viz-pane::-webkit-scrollbar { width: 6px; }
+.viz-pane::-webkit-scrollbar-thumb { background: var(--apricot); border-radius: 3px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   CARD COMPONENTS
+   ═══════════════════════════════════════════════════════════════ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+.card-title {
+  font-weight: 700; font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title .icon { font-size: 15px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ROLE 1 — STATE MACHINE + NAMESPACE RINGS
+   ═══════════════════════════════════════════════════════════════ */
+.state-machine {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 0;
+}
+.state-node {
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  font-size: 11px; font-weight: 700;
+  border: 2px solid var(--apricot);
+  color: var(--text-muted);
+  background: rgba(255,214,166,0.15);
+  transition: all 0.35s ease;
+  letter-spacing: 0.04em;
+}
+.state-node.active {
+  background: var(--salmon);
+  border-color: var(--salmon);
+  color: white;
+  box-shadow: 0 0 0 4px rgba(255,154,134,0.25), var(--shadow-sm);
+  animation: node-pulse 2s ease infinite;
+}
+.state-node.done {
+  background: rgba(45,154,78,0.12);
+  border-color: var(--success);
+  color: var(--success);
+}
+@keyframes node-pulse {
+  0%,100% { box-shadow: 0 0 0 4px rgba(255,154,134,0.25); }
+  50%      { box-shadow: 0 0 0 8px rgba(255,154,134,0.10); }
+}
+.state-arrow { font-size: 14px; color: var(--peach); font-weight: 700; }
+
+.namespace-rings {
+  position: relative;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ns-ring {
+  position: absolute;
+  border-radius: var(--radius-lg);
+  border: 2px dashed transparent;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ns-ring.visible { opacity: 1; transform: scale(1); }
+.ns-ring:nth-child(1) { width: 80px;  height: 60px;  border-color: var(--salmon);  color: var(--salmon);  background: rgba(255,154,134,0.07); }
+.ns-ring:nth-child(2) { width: 120px; height: 90px;  border-color: var(--peach);   color: var(--peach);   background: rgba(255,179,153,0.05); }
+.ns-ring:nth-child(3) { width: 160px; height: 120px; border-color: var(--apricot); color: var(--apricot); background: rgba(255,214,166,0.05); }
+.ns-ring:nth-child(4) { width: 200px; height: 150px; border-color: #F0D090;         color: #D4A860;        background: rgba(255,240,190,0.05); }
+.ns-ring:nth-child(5) { width: 240px; height: 175px; border-color: #E0C080;         color: #C09040;        background: transparent; }
+
+.ns-center {
+  position: absolute;
+  background: var(--gradient-warm);
+  border-radius: 10px;
+  padding: 10px 16px;
+  text-align: center;
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  box-shadow: var(--shadow-md);
+  z-index: 5;
+}
+
+.pid-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.pid-side {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.pid-side.host   { background: rgba(255,214,166,0.20); border: 1px solid var(--apricot); }
+.pid-side.container { background: rgba(255,154,134,0.10); border: 2px solid var(--salmon); }
+.pid-side h4 { font-size: 11px; font-weight: 700; margin-bottom: 8px; letter-spacing: 0.04em; }
+.pid-row { display: flex; gap: 12px; padding: 2px 0; }
+.pid-num { color: var(--salmon); font-weight: 700; min-width: 45px; }
+.pid-highlight { color: var(--salmon); font-weight: 700; font-size: 14px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ROLE 2 — MEMORY BAR + OVERLAY FS
+   ═══════════════════════════════════════════════════════════════ */
+.memory-bar-wrap {
+  position: relative;
+  height: 36px;
+  background: rgba(255,214,166,0.25);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  border: 1px solid var(--apricot);
+}
+.memory-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--salmon), var(--peach));
+  transition: width 0.5s ease;
+  width: 0%;
+  display: flex; align-items: center; padding-left: 14px;
+  font-size: 12px; font-weight: 700; color: white;
+}
+.memory-threshold {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  display: flex; align-items: flex-start;
+}
+.memory-threshold-high { background: var(--warning); }
+.memory-threshold-max  { background: var(--danger); }
+.memory-threshold span {
+  font-size: 9px; font-weight: 700;
+  color: white; background: currentColor;
+  padding: 2px 5px;
+  border-radius: 0 3px 3px 0;
+  white-space: nowrap;
+  margin-top: 4px;
+}
+.memory-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--text-muted); }
+
+.overlay-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 0 0;
+}
+.overlay-layer {
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  margin-bottom: 4px;
+  border: 2px solid transparent;
+  opacity: 0.4;
+  transition: all 0.45s ease;
+  font-size: 12px;
+  display: flex; align-items: center; gap: 10px;
+}
+.overlay-layer.visible { opacity: 1; }
+.overlay-layer-merged { background: rgba(255,154,134,0.15); border-color: var(--salmon); }
+.overlay-layer-upper  { background: rgba(255,179,153,0.15); border-color: var(--peach); }
+.overlay-layer-lower  { background: rgba(255,240,190,0.30); border-color: var(--cream); }
+.layer-badge {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: var(--radius-full);
+  white-space: nowrap; flex-shrink: 0;
+}
+.layer-badge-merged { background: var(--salmon); color: white; }
+.layer-badge-upper  { background: var(--peach); color: white; }
+.layer-badge-lower  { background: var(--cream); color: var(--text-secondary); border: 1px solid var(--apricot); }
+
+.mount-tree { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.mount-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0;
+  opacity: 0.3;
+  transition: all 0.4s ease;
+}
+.mount-item.visible { opacity: 1; }
+.mount-badge {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ROLE 3 — GANTT + FAIRNESS
+   ═══════════════════════════════════════════════════════════════ */
+.gantt-wrap { overflow-x: auto; }
+.gantt-rows { display: flex; flex-direction: column; gap: 8px; }
+.gantt-row { display: flex; align-items: center; gap: 10px; }
+.gantt-label { width: 80px; font-size: 12px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; }
+.gantt-track {
+  flex: 1;
+  height: 28px;
+  background: rgba(255,214,166,0.20);
+  border-radius: var(--radius-full);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--apricot);
+}
+.gantt-block {
+  position: absolute;
+  height: 100%; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; color: white;
+  transition: width 0.15s ease;
+  min-width: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ROLE 4 — BANKER'S ALGORITHM + SEMAPHORE
+   ═══════════════════════════════════════════════════════════════ */
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.matrix-table th {
+  background: rgba(255,154,134,0.12);
+  color: var(--text-secondary);
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--border);
+  text-align: center;
+}
+.matrix-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-primary);
+  font-size: 12px;
+  transition: all 0.3s ease;
+}
+.matrix-table tr:hover td { background: rgba(255,214,166,0.12); }
+.cell-highlight-green { background: rgba(45,154,78,0.18) !important; color: var(--success); font-weight: 700; border-radius: 4px; }
+.cell-highlight-red   { background: rgba(217,79,53,0.15) !important; color: var(--danger);  font-weight: 700; border-radius: 4px; }
+.cell-highlight-blue  { background: rgba(255,154,134,0.20) !important; color: var(--salmon); font-weight: 700; border-radius: 4px; }
+
+.decision-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-weight: 700; font-size: 14px;
+  animation: badge-in 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  margin-bottom: 8px;
+}
+.badge-granted { background: rgba(45,154,78,0.15); color: var(--success); border: 1px solid rgba(45,154,78,0.30); }
+.badge-denied  { background: rgba(217,79,53,0.12); color: var(--danger);  border: 1px solid rgba(217,79,53,0.25); }
+@keyframes badge-in { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.safe-sequence {
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; margin-top: 6px;
+}
+.safe-step {
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(255,154,134,0.12);
+  border: 1px solid var(--peach);
+  font-size: 12px; font-weight: 700;
+  color: var(--salmon);
+  animation: step-in 0.35s ease;
+}
+@keyframes step-in { from { transform: translateY(6px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.safe-arrow { color: var(--peach); font-weight: 700; }
+
+.semaphore-display {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.sem-container {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border);
+  text-align: center;
+  transition: all 0.35s ease;
+}
+.sem-container.holding { border-color: var(--success); background: rgba(45,154,78,0.08); }
+.sem-container.waiting { border-color: var(--warning); background: rgba(232,148,42,0.08); }
+.sem-container.idle    { border-color: var(--border); }
+.sem-icon { font-size: 28px; margin-bottom: 6px; }
+.sem-name { font-weight: 700; font-size: 13px; }
+.sem-status { font-size: 11px; font-weight: 600; margin-top: 4px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ROLE 5 — DISK SCHEDULING RACE + METRICS
+   ═══════════════════════════════════════════════════════════════ */
+.test-checklist { display: flex; flex-direction: column; gap: 6px; }
+.test-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255,214,166,0.10);
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+  font-size: 12px;
+}
+.test-item.active  { border-color: var(--peach);   background: rgba(255,179,153,0.10); }
+.test-item.passed  { border-color: var(--success);  background: rgba(45,154,78,0.07); }
+.test-item.failed  { border-color: var(--danger);   background: rgba(217,79,53,0.07); }
+.test-indicator {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: grid; place-items: center;
+  font-size: 10px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.test-item.active  .test-indicator { border-color: var(--peach);   background: var(--peach); color: white; }
+.test-item.passed  .test-indicator { border-color: var(--success);  background: var(--success); color: white; }
+.test-item.failed  .test-indicator { border-color: var(--danger);   background: var(--danger);  color: white; }
+.test-name { flex: 1; font-weight: 500; color: var(--text-secondary); }
+.test-result { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+
+/* ── Disk Scheduling Race ── */
+.disk-legend {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.legend-dot {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600; color: var(--text-secondary);
+}
+.legend-dot::before {
+  content: '';
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--dot-color);
+  display: block;
+}
+
+.algo-lane {
+  margin-bottom: 14px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.algo-lane.best { border-color: var(--success); background: rgba(45,154,78,0.04); }
+
+.algo-lane-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.algo-name-badge {
+  font-size: 12px; font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: var(--role-bg, rgba(255,154,134,0.12));
+  color: var(--role-color, var(--salmon));
+}
+.algo-seek-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px; font-weight: 700;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+.algo-seek-label { font-size: 10px; color: var(--text-muted); font-weight: 500; text-align: right; }
+
+.disk-ruler {
+  position: relative;
+  height: 52px;
+  background: rgba(255,240,190,0.40);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--apricot);
+  overflow: visible;
+  margin: 0 8px;
+}
+.ruler-bar {
+  position: absolute;
+  top: 50%; left: 8px; right: 8px;
+  height: 4px;
+  background: var(--apricot);
+  border-radius: 2px;
+  transform: translateY(-50%);
+}
+.ruler-label {
+  position: absolute;
+  bottom: 2px;
+  font-size: 9px;
+  color: var(--text-muted);
+  transform: translateX(-50%);
+}
+.req-dot {
+  position: absolute;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  top: 50%; transform: translate(-50%, -50%);
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  z-index: 2;
+  transition: transform 0.2s ease;
+}
+.req-dot:hover { transform: translate(-50%, -50%) scale(1.4); z-index: 10; }
+.head-marker {
+  position: absolute;
+  width: 2px; top: 6px; bottom: 6px;
+  background: #3D1C0E;
+  border-radius: 1px;
+  transition: left 0.28s ease;
+  z-index: 8;
+}
+.head-marker::before {
+  content: '▼';
+  position: absolute;
+  top: -14px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px; color: #3D1C0E;
+}
+.trail-segment {
+  position: absolute;
+  height: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.35;
+  z-index: 1;
+  border-radius: 1px;
+}
+.algo-concept {
+  margin-top: 8px;
+  font-size: 11px; color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.5;
+}
+.best-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700;
+  color: var(--success);
+  background: rgba(45,154,78,0.12);
+  padding: 3px 10px; border-radius: var(--radius-full);
+  border: 1px solid rgba(45,154,78,0.25);
+  margin-left: 8px;
+}
+
+.disk-comparison-chart { margin-top: 6px; }
+
+/* ── Metric Cards ── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.metric-card {
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.metric-card-id { font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; }
+.metric-bar-wrap {
+  height: 6px;
+  background: rgba(255,214,166,0.30);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+.metric-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--salmon), var(--peach));
+  transition: width 0.5s ease;
+}
+.metric-val { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.metric-status {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  margin-left: 4px;
+  box-shadow: 0 0 6px rgba(45,154,78,0.5);
+  animation: blink 2s ease infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Loading state ── */
+.viz-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  flex: 1; gap: 12px;
+  color: var(--text-muted);
+  text-align: center; font-size: 13px;
+  padding: 40px;
+}
+.viz-empty .empty-icon { font-size: 40px; filter: grayscale(0.3); }
+
+/* Separator line */
+hr.warm { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── SIDEBAR ─────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🐳</div>
+      <div>
+        <div class="logo-text">MiniDocker</div>
+        <div class="logo-sub">ML2011 · VIT Pune · 2025-26</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboard</div>
+      <div class="nav-item active" data-page="overview" onclick="navigate('overview')">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">Overview</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Roles</div>
+      <div class="nav-item" data-page="role1" onclick="navigate('role1')" style="--role-color:#FF9A86">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">Architecture</span>
+        <span class="nav-badge">R1</span>
+        <span class="nav-status idle" id="nav-status-1"></span>
+      </div>
+      <div class="nav-item" data-page="role2" onclick="navigate('role2')" style="--role-color:#FFB399">
+        <span class="nav-icon">💾</span>
+        <span class="nav-label">Memory & Store</span>
+        <span class="nav-badge">R2</span>
+        <span class="nav-status idle" id="nav-status-2"></span>
+      </div>
+      <div class="nav-item" data-page="role3" onclick="navigate('role3')" style="--role-color:#E8942A">
+        <span class="nav-icon">⚡</span>
+        <span class="nav-label">CPU Scheduler</span>
+        <span class="nav-badge">R3</span>
+        <span class="nav-status idle" id="nav-status-3"></span>
+      </div>
+      <div class="nav-item" data-page="role4" onclick="navigate('role4')" style="--role-color:#C47A55">
+        <span class="nav-icon">🔐</span>
+        <span class="nav-label">Security & Sync</span>
+        <span class="nav-badge">R4</span>
+        <span class="nav-status idle" id="nav-status-4"></span>
+      </div>
+      <div class="nav-item" data-page="role5" onclick="navigate('role5')" style="--role-color:#FF9A86">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Monitoring & I/O</span>
+        <span class="nav-badge">R5</span>
+        <span class="nav-status idle" id="nav-status-5"></span>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="btn-run-all" onclick="navigate('overview')">
+        <span>🚀</span> View All Roles
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ────────────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div>
+        <div class="topbar-title">Container Orchestration System</div>
+        <div class="topbar-sub">Mini Docker — OS Simulation Dashboard</div>
+      </div>
+      <div class="topbar-chips">
+        <span class="chip">Linux Namespaces</span>
+        <span class="chip">cgroups v2</span>
+        <span class="chip">Banker's Algorithm</span>
+        <span class="chip">Disk Scheduling</span>
+      </div>
+    </div>
+
+    <div class="content-area">
+
+      <!-- ═══ OVERVIEW PAGE ════════════════════════════════════ -->
+      <div id="page-overview" class="page active">
+        <div class="overview-hero">
+          <h1>🐳 Mini Docker Dashboard</h1>
+          <p>Interactive OS concept visualizer — click any role to explore its subsystem with live terminal output and real-time animations.</p>
+        </div>
+
+        <div class="roles-grid" id="roles-grid">
+          <!-- populated by JS -->
+        </div>
+      </div>
+
+      <!-- ═══ ROLE 1 PAGE ══════════════════════════════════════ -->
+      <div id="page-role1" class="page role-page" style="--role-color:#FF9A86;--role-bg:rgba(255,154,134,0.10)">
+        <div class="role-controls" style="width:100%;flex-wrap:wrap;">
+          <div class="role-badge" style="background:rgba(255,154,134,0.12)">
+            <span class="role-badge-num" style="background:#FF9A86">1</span>
+            <span class="role-badge-name">Architecture — Namespaces &amp; Lifecycle</span>
+          </div>
+          <span class="role-controls-info">clone() with CLONE_NEWPID | CLONE_NEWNS | CLONE_NEWNET | CLONE_NEWUTS | CLONE_NEWIPC</span>
+          <button class="btn-run" id="btn-run-1" onclick="runRole(1)" style="background:#FF9A86;box-shadow:0 3px 12px rgba(255,154,134,0.40)">▶ Run Demo</button>
+          <button class="btn-reset" onclick="resetRole(1)">↺ Reset</button>
+        </div>
+        <div class="split-pane" style="flex:1">
+          <div class="terminal-pane">
+            <div class="terminal-header">
+              <div class="term-dots"><div class="term-dot"></div><div class="term-dot"></div><div class="term-dot"></div></div>
+              <span>role1_demo — Architecture</span>
+            </div>
+            <div id="terminal-output-1" class="terminal-output-1"></div>
+          </div>
+          <div class="viz-pane" id="viz-role1">
+            <div class="card">
+              <div class="card-title"><span class="icon">🔄</span> Container State Machine</div>
+              <div class="state-machine" id="r1-states">
+                <span class="state-node" id="r1-PENDING">PENDING</span>
+                <span class="state-arrow">→</span>
+                <span class="state-node" id="r1-CREATING">CREATING</span>
+                <span class="state-arrow">→</span>
+                <span class="state-node" id="r1-RUNNING">RUNNING</span>
+                <span class="state-arrow">→</span>
+                <span class="state-node" id="r1-STOPPING">STOPPING</span>
+                <span class="state-arrow">→</span>
+                <span class="state-node" id="r1-STOPPED">STOPPED</span>
+                <span class="state-arrow">→</span>
+                <span class="state-node" id="r1-TERMINATED">TERMINATED</span>
+              </div>
+              <hr class="warm" style="margin:14px 0"/>
+              <div style="font-size:12px;color:var(--text-muted);text-align:center" id="r1-info">Waiting for demo to run…</div>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="icon">🌐</span> Namespace Isolation Rings</div>
+              <div class="namespace-rings" id="r1-rings">
+                <div class="ns-ring" id="r1-ring-pid">PID</div>
+                <div class="ns-ring" id="r1-ring-mnt">MNT</div>
+                <div class="ns-ring" id="r1-ring-net">NET</div>
+                <div class="ns-ring" id="r1-ring-uts">UTS</div>
+                <div class="ns-ring" id="r1-ring-ipc">IPC</div>
+                <div class="ns-center" id="r1-ns-center">Container<br/><span style="font-size:10px;opacity:0.8">initializing…</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="icon">🔢</span> PID Isolation Proof</div>
+              <div class="pid-compare">
+                <div class="pid-side host">
+                  <h4 style="color:var(--text-muted)">🖥 HOST VIEW</h4>
+                  <div class="pid-row"><span class="pid-num">PID 1</span><span>systemd</span></div>
+                  <div class="pid-row"><span class="pid-num">PID 893</span><span>nginx</span></div>
+                  <div class="pid-row"><span class="pid-num" id="r1-host-pid">PID ???</span><span>container</span></div>
+                  <div class="pid-row" style="color:var(--text-muted)"><span class="pid-num">…</span><span>many others</span></div>
+                </div>
+                <div class="pid-side container">
+                  <h4 style="color:var(--salmon)">📦 CONTAINER VIEW</h4>
+                  <div class="pid-row"><span class="pid-highlight">PID 1</span><span style="color:var(--salmon);font-weight:600">[init] ← isolated!</span></div>
+                  <div class="pid-row" style="color:var(--text-muted);font-size:11px;padding-top:8px">Host PIDs are invisible inside the namespace</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ROLE 2 PAGE ══════════════════════════════════════ -->
+      <div id="page-role2" class="page role-page" style="--role-color:#FFB399;--role-bg:rgba(255,179,153,0.12)">
+        <div class="role-controls" style="width:100%;flex-wrap:wrap;">
+          <div class="role-badge" style="background:rgba(255,179,153,0.15)">
+            <span class="role-badge-num" style="background:#FFB399;color:#5A2A10">2</span>
+            <span class="role-badge-name">Memory &amp; Storage — cgroups v2 + OverlayFS</span>
+          </div>
+          <span class="role-controls-info">memory.max / memory.high / overlayfs / tmpfs mounts</span>
+          <button class="btn-run" id="btn-run-2" onclick="runRole(2)" style="background:#FFB399;color:#5A2A10;box-shadow:0 3px 12px rgba(255,179,153,0.40)">▶ Run Demo</button>
+          <button class="btn-reset" onclick="resetRole(2)">↺ Reset</button>
+        </div>
+        <div class="split-pane" style="flex:1">
+          <div class="terminal-pane">
+            <div class="terminal-header">
+              <div class="term-dots"><div class="term-dot"></div><div class="term-dot"></div><div class="term-dot"></div></div>
+              <span>role2_demo — Memory &amp; Storage</span>
+            </div>
+            <div id="terminal-output-2" class="terminal-output-2"></div>
+          </div>
+          <div class="viz-pane" id="viz-role2">
+            <div class="card">
+              <div class="card-title"><span class="icon">🧠</span> Memory Pressure Monitor</div>
+              <div class="memory-bar-wrap" id="r2-membar-wrap">
+                <div class="memory-bar-fill" id="r2-membar" style="width:0%">0 MB</div>
+                <div class="memory-threshold memory-threshold-high" id="r2-thresh-high" style="left:80%">
+                  <span style="background:#E8942A;color:white;font-size:9px;font-weight:700;padding:2px 5px;border-radius:0 3px 3px 0">HIGH</span>
+                </div>
+                <div class="memory-threshold memory-threshold-max" style="left:100%"></div>
+              </div>
+              <div class="memory-labels">
+                <span>0 MB</span>
+                <span id="r2-mem-high-label">— / —</span>
+                <span id="r2-mem-max-label">— MB (max)</span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="icon">📂</span> OverlayFS Layers (Copy-on-Write)</div>
+              <div class="overlay-layers">
+                <div class="overlay-layer overlay-layer-merged" id="r2-layer-merged">
+                  <span class="layer-badge layer-badge-merged">MERGED</span>
+                  <span style="font-size:12px;color:var(--text-secondary)">What container sees — unified view of all layers</span>
+                </div>
+                <div style="text-align:center;font-size:18px;color:var(--peach);margin:-4px 0">↑ CoW</div>
+                <div class="overlay-layer overlay-layer-upper" id="r2-layer-upper">
+                  <span class="layer-badge layer-badge-upper">UPPER</span>
+                  <span style="font-size:12px;color:var(--text-secondary)">Read-Write layer — container writes land here</span>
+                </div>
+                <div style="text-align:center;font-size:18px;color:var(--apricot);margin:-4px 0">+</div>
+                <div class="overlay-layer overlay-layer-lower" id="r2-layer-lower">
+                  <span class="layer-badge layer-badge-lower">LOWER</span>
+                  <span style="font-size:12px;color:var(--text-secondary)">Read-Only base image — shared by all containers</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="icon">🗂</span> Virtual Filesystem Mounts</div>
+              <div class="mount-tree" id="r2-mounts">
+                <div class="mount-item" id="r2-mount-root"><span style="color:var(--salmon)">/ (merged)</span></div>
+                <div class="mount-item" id="r2-mount-proc">
+                  <span style="color:var(--text-muted)">├── </span><span>proc/</span>
+                  <span class="mount-badge" style="background:rgba(255,154,134,0.15);color:var(--salmon)">PID namespace</span>
+                </div>
+                <div class="mount-item" id="r2-mount-tmp">
+                  <span style="color:var(--text-muted)">├── </span><span>tmp/</span>
+                  <span class="mount-badge" style="background:rgba(255,214,166,0.25);color:var(--text-secondary)">tmpfs 64MB</span>
+                </div>
+                <div class="mount-item" id="r2-mount-dev">
+                  <span style="color:var(--text-muted)">└── </span><span>dev/</span>
+                  <span class="mount-badge" style="background:rgba(255,179,153,0.15);color:var(--text-secondary)">devtmpfs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ROLE 3 PAGE ══════════════════════════════════════ -->
+      <div id="page-role3" class="page role-page" style="--role-color:#E8942A;--role-bg:rgba(232,148,42,0.10)">
+        <div class="role-controls" style="width:100%;flex-wrap:wrap;">
+          <div class="role-badge" style="background:rgba(232,148,42,0.10)">
+            <span class="role-badge-num" style="background:#E8942A">3</span>
+            <span class="role-badge-name">CPU Scheduler — Weighted Round-Robin + cgroups</span>
+          </div>
+          <span class="role-controls-info">cpu.weight / cpu.max / CFS-style weighted deficit scheduling</span>
+          <button class="btn-run" id="btn-run-3" onclick="runRole(3)" style="background:#E8942A;box-shadow:0 3px 12px rgba(232,148,42,0.40)">▶ Run Demo</button>
+          <button class="btn-reset" onclick="resetRole(3)">↺ Reset</button>
+        </div>
+        <div class="split-pane" style="flex:1">
+          <div class="terminal-pane">
+            <div class="terminal-header">
+              <div class="term-dots"><div class="term-dot"></div><div class="term-dot"></div><div class="term-dot"></div></div>
+              <span>role3_demo — CPU Scheduler</span>
+            </div>
+            <div id="terminal-output-3" class="terminal-output-3"></div>
+          </div>
+          <div class="viz-pane" id="viz-role3">
+            <div class="card">
+              <div class="card-title"><span class="icon">📊</span> CPU Gantt Chart (Live)</div>
+              <div class="gantt-rows" id="r3-gantt">
+                <!-- rows added by JS -->
+              </div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:10px;text-align:center">Width proportional to CPU share weight · Updates each tick</div>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="icon">⚖️</span> Scheduler Fairness Report</div>
+              <table class="matrix-table" id="r3-fairness-table">
+                <thead>
+                  <tr>
+                    <th>Container</th><th>Shares</th><th>cpu.weight</th><th>Expected %</th><th>Actual %</th><th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="r3-fairness-body">
+                  <tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">Run the demo to see fairness data</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="icon">🎯</span> CPU Quota Configuration</div>
+              <div id="r3-cgroup-info" style="font-size:12px;color:var(--text-muted)">Run demo to see cpu.weight and cpu.max configuration…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ROLE 4 PAGE ══════════════════════════════════════ -->
+      <div id="page-role4" class="page role-page" style="--role-color:#C47A55;--role-bg:rgba(196,122,85,0.10)">
+        <div class="role-controls" style="width:100%;flex-wrap:wrap;">
+          <div class="role-badge" style="background:rgba(196,122,85,0.10)">
+            <span class="role-badge-num" style="background:#C47A55">4</span>
+            <span class="role-badge-name">Security &amp; Sync — Banker's Algorithm + Semaphores</span>
+          </div>
+          <span class="role-controls-info">✅ No sudo needed — pure userspace Banker's algorithm + POSIX named semaphores</span>
+          <button class="btn-run" id="btn-run-4" onclick="runRole(4)" style="background:#C47A55;box-shadow:0 3px 12px rgba(196,122,85,0.40)">▶ Run Demo</button>
+          <button class="btn-reset" onclick="resetRole(4)">↺ Reset</button>
+        </div>
+        <div class="split-pane" style="flex:1">
+          <div class="terminal-pane">
+            <div class="terminal-header">
+              <div class="term-dots"><div class="term-dot"></div><div class="term-dot"></div><div class="term-dot"></div></div>
+              <span>role4_demo — Security &amp; Sync (no sudo)</span>
+            </div>
+            <div id="terminal-output-4" class="terminal-output-4"></div>
+          </div>
+          <div class="viz-pane" id="viz-role4">
+            <div class="card">
+              <div class="card-title"><span class="icon">🏦</span> Banker's Algorithm — Resource State</div>
+              <div id="r4-available" style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+                <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Available:</span>
+                <span class="matrix-table" id="r4-avail-display" style="font-family:JetBrains Mono;font-size:13px;font-weight:700;color:var(--success)">—</span>
+              </div>
+              <table class="matrix-table">
+                <thead>
+                  <tr>
+                    <th>Process</th><th>Max Need</th><th>Allocated</th><th>Still Needs</th>
+                  </tr>
+                </thead>
+                <tbody id="r4-matrix-body">
+                  <tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:20px">Run the demo to see allocation state</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="icon">🔀</span> Decision Log</div>
+              <div id="r4-decision-log" style="min-height:60px;">
+                <div style="color:var(--text-muted);font-size:12px">Decisions will appear here as requests are processed…</div>
+              </div>
+              <hr class="warm" style="margin:10px 0"/>
+              <div class="card-title" style="margin-top:4px"><span class="icon">✅</span> Safe Sequence</div>
+              <div class="safe-sequence" id="r4-safe-seq">
+                <span style="color:var(--text-muted);font-size:12px">Computed after each safety check…</span>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title"><span class="icon">🔒</span> Semaphore — Mutual Exclusion</div>
+              <div class="semaphore-display">
+                <div class="sem-container idle" id="r4-sem-A">
+                  <div class="sem-icon">🔓</div>
+                  <div class="sem-name">container-A</div>
+                  <div class="sem-status" id="r4-sem-A-status" style="color:var(--text-muted)">idle</div>
+                </div>
+                <div class="sem-container idle" id="r4-sem-B">
+                  <div class="sem-icon">🔓</div>
+                  <div class="sem-name">container-B</div>
+                  <div class="sem-status" id="r4-sem-B-status" style="color:var(--text-muted)">idle</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ ROLE 5 PAGE ══════════════════════════════════════ -->
+      <div id="page-role5" class="page role-page" style="--role-color:#FF9A86;--role-bg:rgba(255,154,134,0.10)">
+        <div class="role-controls" style="width:100%;flex-wrap:wrap;">
+          <div class="role-badge" style="background:rgba(255,154,134,0.12)">
+            <span class="role-badge-num" style="background:#FF9A86">5</span>
+            <span class="role-badge-name">Monitoring &amp; I/O — Disk Scheduling + Integration Tests</span>
+          </div>
+          <span class="role-controls-info">FCFS · SSTF · SCAN · C-SCAN · Live metrics · Test suite</span>
+          <button class="btn-run" id="btn-run-5" onclick="runRole(5)" style="background:#FF9A86;box-shadow:0 3px 12px rgba(255,154,134,0.40)">▶ Run Demo</button>
+          <button class="btn-reset" onclick="resetRole(5)">↺ Reset</button>
+        </div>
+        <div class="split-pane" style="flex:1">
+          <div class="terminal-pane">
+            <div class="terminal-header">
+              <div class="term-dots"><div class="term-dot"></div><div class="term-dot"></div><div class="term-dot"></div></div>
+              <span>role5_demo — Monitoring &amp; I/O</span>
+            </div>
+            <div id="terminal-output-5" class="terminal-output-5"></div>
+          </div>
+          <div class="viz-pane" id="viz-role5">
+            <div class="card">
+              <div class="card-title"><span class="icon">🧪</span> Integration Test Suite</div>
+              <div class="test-checklist" id="r5-tests">
+                <div class="test-item" id="r5-test-1"><div class="test-indicator">1</div><div class="test-name">Container startup latency (target &lt;500ms)</div><div class="test-result" id="r5-test-1-result">–</div></div>
+                <div class="test-item" id="r5-test-2"><div class="test-indicator">2</div><div class="test-name">PID namespace isolation</div><div class="test-result" id="r5-test-2-result">manual</div></div>
+                <div class="test-item" id="r5-test-3"><div class="test-indicator">3</div><div class="test-name">Memory limit enforcement (OOM test)</div><div class="test-result" id="r5-test-3-result">manual</div></div>
+                <div class="test-item" id="r5-test-4"><div class="test-indicator">4</div><div class="test-name">CPU scheduler fairness ±5%</div><div class="test-result" id="r5-test-4-result">manual</div></div>
+                <div class="test-item" id="r5-test-5"><div class="test-indicator">5</div><div class="test-name">Deadlock prevention (0 deadlocks / 1000 ops)</div><div class="test-result" id="r5-test-5-result">–</div></div>
+                <div class="test-item" id="r5-test-6"><div class="test-indicator">6</div><div class="test-name">Disk Scheduling — FCFS · SSTF · SCAN · C-SCAN</div><div class="test-result" id="r5-test-6-result">–</div></div>
+              </div>
+            </div>
+
+            <!-- Disk Scheduling Race -->
+            <div class="card" id="r5-disk-card">
+              <div class="card-title"><span class="icon">💿</span> Disk Scheduling Race — 200 Cylinders, Head @ 53</div>
+              <div class="disk-legend" id="r5-disk-legend">
+                <span style="font-size:11px;color:var(--text-muted)">Request dots will appear when TEST 6 starts…</span>
+              </div>
+              <!-- 4 algorithm lanes -->
+              <div id="r5-algo-lanes">
+                <div class="algo-lane" id="r5-lane-fcfs">
+                  <div class="algo-lane-header">
+                    <span class="algo-name-badge" style="background:rgba(255,154,134,0.15);color:#D94F35">FCFS — First Come First Served</span>
+                    <div style="text-align:right"><div class="algo-seek-count" id="r5-seek-fcfs" style="color:#D94F35">0</div><div class="algo-seek-label">cylinders</div></div>
+                  </div>
+                  <div class="disk-ruler" id="r5-ruler-fcfs"><div class="ruler-bar"></div></div>
+                  <div class="algo-concept">Arrival order — O(n), no starvation, worst seek performance</div>
+                </div>
+                <div class="algo-lane" id="r5-lane-sstf">
+                  <div class="algo-lane-header">
+                    <span class="algo-name-badge" style="background:rgba(232,148,42,0.15);color:#C47A20">SSTF — Shortest Seek Time First</span>
+                    <div style="text-align:right"><div class="algo-seek-count" id="r5-seek-sstf" style="color:#C47A20">0</div><div class="algo-seek-label">cylinders</div></div>
+                  </div>
+                  <div class="disk-ruler" id="r5-ruler-sstf"><div class="ruler-bar"></div></div>
+                  <div class="algo-concept">Greedy nearest cylinder — best avg seek, but can starve distant requests</div>
+                </div>
+                <div class="algo-lane" id="r5-lane-scan">
+                  <div class="algo-lane-header">
+                    <span class="algo-name-badge" style="background:rgba(45,154,78,0.12);color:var(--success)">SCAN — Elevator Algorithm</span>
+                    <div style="text-align:right"><div class="algo-seek-count" id="r5-seek-scan" style="color:var(--success)">0</div><div class="algo-seek-label">cylinders</div></div>
+                  </div>
+                  <div class="disk-ruler" id="r5-ruler-scan"><div class="ruler-bar"></div></div>
+                  <div class="algo-concept">Sweeps high → services → reverses — no starvation, real HDDs use this</div>
+                </div>
+                <div class="algo-lane" id="r5-lane-cscan">
+                  <div class="algo-lane-header">
+                    <span class="algo-name-badge" style="background:rgba(100,100,220,0.10);color:#5050B0">C-SCAN — Circular SCAN</span>
+                    <div style="text-align:right"><div class="algo-seek-count" id="r5-seek-cscan" style="color:#5050B0">0</div><div class="algo-seek-label">cylinders</div></div>
+                  </div>
+                  <div class="disk-ruler" id="r5-ruler-cscan"><div class="ruler-bar"></div></div>
+                  <div class="algo-concept">Sweeps high → jumps to 0 → uniform wait times, fairer for multi-container I/O</div>
+                </div>
+              </div>
+              <div class="card" id="r5-comparison-chart-card" style="margin-top:12px;display:none">
+                <div class="card-title"><span class="icon">📊</span> Algorithm Comparison</div>
+                <canvas id="r5-comparison-chart" height="120"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- / content-area -->
+  </div><!-- / main -->
+</div><!-- / app -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ══════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+/* ── Role metadata ─────────────────────────────────────────────────────── */
+const ROLES = {
+  1: { id:1, name:'Architecture', sub:'Linux Namespaces + Process Lifecycle', icon:'⚙️',
+       color:'#FF9A86', bg:'rgba(255,154,134,0.10)',
+       tags:['clone()','CLONE_NEWPID','Namespaces','State Machine','Zombie Prevention'],
+       desc:'Creates isolated containers using Linux namespace flags with clone(). Manages the full container lifecycle from PENDING → TERMINATED.',
+       sudo: true },
+  2: { id:2, name:'Memory & Storage', sub:'cgroups v2 + OverlayFS', icon:'💾',
+       color:'#FFB399', bg:'rgba(255,179,153,0.12)',
+       tags:['cgroups v2','memory.max','OverlayFS','CoW','OOM Killer'],
+       desc:'Enforces memory limits with cgroups v2 memory controllers. Builds container rootfs with OverlayFS copy-on-write layering.',
+       sudo: true },
+  3: { id:3, name:'CPU Scheduler', sub:'Weighted Round-Robin + cgroups', icon:'⚡',
+       color:'#E8942A', bg:'rgba(232,148,42,0.10)',
+       tags:['cpu.weight','cpu.max','Round-Robin','CFS','Fairness ±5%'],
+       desc:'Implements a weighted deficit scheduler on top of cgroups v2 cpu.weight and cpu.max — mirrors Linux CFS virtual runtime.',
+       sudo: true },
+  4: { id:4, name:'Security & Sync', sub:"Banker's Algorithm + POSIX Semaphores", icon:'🔐',
+       color:'#C47A55', bg:'rgba(196,122,85,0.10)',
+       tags:["Banker's Algo",'Safe State','Semaphores','Deadlock Avoidance','IPC'],
+       desc:'Deadlock avoidance via Banker\'s algorithm. Shared resource mutual exclusion through POSIX named semaphores.',
+       sudo: false },
+  5: { id:5, name:'Monitoring & I/O', sub:'Disk Scheduling + Integration Tests', icon:'📊',
+       color:'#FF9A86', bg:'rgba(255,154,134,0.10)',
+       tags:['FCFS','SSTF','SCAN','C-SCAN','TEST Suite'],
+       desc:'Live metrics dashboard + 6-test integration suite. Disk scheduling simulation (FCFS/SSTF/SCAN/C-SCAN) on 200 cylinders.',
+       sudo: true },
+};
+
+/* ── Navigation ────────────────────────────────────────────────────────── */
+let currentPage = 'overview';
+let currentRole = null;
+let ws = null;
+const terminalOutputs = {};  // roleN -> div element
+
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  const pg = document.getElementById('page-' + page);
+  if (pg) pg.classList.add('active');
+
+  const nav = document.querySelector(`[data-page="${page}"]`);
+  if (nav) nav.classList.add('active');
+
+  currentPage = page;
+
+  // Wire up the shared #terminal-output element for split pane
+  if (page.startsWith('role')) {
+    const roleNum = page.replace('role', '');
+    currentRole = parseInt(roleNum);
+    const termEl = document.querySelector(`.terminal-output-${roleNum}`);
+    if (termEl && !terminalOutputs[roleNum]) {
+      terminalOutputs[roleNum] = termEl;
+      // Give unique IDs so we can scroll them individually
+      termEl.id = 'terminal-output-' + roleNum;
+    }
+  }
+}
+
+/* ── Overview: render role cards ───────────────────────────────────────── */
+function renderOverview(statuses) {
+  const grid = document.getElementById('roles-grid');
+  grid.innerHTML = '';
+  Object.values(ROLES).forEach(r => {
+    const ready = statuses ? statuses[r.id]?.exists : null;
+    const statusHtml = ready === true
+      ? '<span class="role-card-status status-ready">✓ Compiled</span>'
+      : ready === false
+        ? '<span class="role-card-status status-missing">⚠ Not compiled</span>'
+        : '';
+    const tagsHtml = r.tags.map(t => `<span class="tag">${t}</span>`).join('');
+    grid.innerHTML += `
+      <div class="role-card" style="--role-color:${r.color};--role-bg:${r.bg}"
+           onclick="navigate('role${r.id}')">
+        ${statusHtml}
+        <div class="role-card-header">
+          <div class="role-card-icon" style="background:${r.bg}">${r.icon}</div>
+          <div>
+            <div class="role-card-title">Role ${r.id} — ${r.name}</div>
+            <div class="role-card-subtitle">${r.sub}</div>
+          </div>
+        </div>
+        <div class="role-card-desc">${r.desc}</div>
+        <div class="role-card-tags">${tagsHtml}</div>
+        <div class="role-card-btn" style="color:${r.color}">
+          <span>Open Dashboard →</span>
+        </div>
+      </div>`;
+  });
+}
+
+async function loadStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    renderOverview(data);
+    Object.entries(data).forEach(([id, s]) => {
+      const dot = document.getElementById('nav-status-' + id);
+      if (dot) {
+        dot.className = 'nav-status ' + (s.exists ? 'ok' : 'error');
+      }
+    });
+  } catch {
+    renderOverview(null);
+  }
+}
+
+/* ── Terminal printing ─────────────────────────────────────────────────── */
+function classifyLine(line) {
+  const l = line.toLowerCase();
+  if (l.includes('error') || l.includes('fail') || l.includes('denied'))  return 'term-fail';
+  if (l.includes('pass') || l.includes('granted') || l.includes('safe'))  return 'term-pass';
+  if (l.includes('warning') || l.includes('wait') || l.includes('unsafe')) return 'term-warn';
+  if (l.includes('[test') || l.startsWith('===') || l.startsWith('---'))   return 'term-head';
+  if (l.includes('[bankers]') || l.includes('[scheduler]') || l.includes('[container'))
+    return 'term-info';
+  if (l.includes('__done__')) return 'term-done';
+  if (l.trim().startsWith('%') || l.trim() === '') return 'term-dim';
+  return '';
+}
+
+function appendToTerminal(roleNum, text) {
+  let el = terminalOutputs[roleNum];
+  if (!el) {
+    el = document.querySelector('.terminal-output-' + roleNum);
+    if (el) terminalOutputs[roleNum] = el;
+  }
+  if (!el) return;
+  const span = document.createElement('span');
+  span.className = 'term-line ' + classifyLine(text);
+  span.textContent = text;
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ── WebSocket runner ──────────────────────────────────────────────────── */
+function runRole(roleNum) {
+  const btn = document.getElementById('btn-run-' + roleNum);
+  if (btn && btn.disabled) return;
+
+  // Clear terminal
+  const termEl = terminalOutputs[roleNum] || document.querySelector('.terminal-output-' + roleNum);
+  if (termEl) { termEl.innerHTML = ''; terminalOutputs[roleNum] = termEl; }
+
+  // Reset visualization
+  resetRoleViz(roleNum);
+
+  if (btn) { btn.disabled = true; btn.classList.add('running'); btn.textContent = '⏳ Running…'; }
+
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${protocol}://${location.host}/ws/run/${roleNum}`);
+
+  ws.onmessage = (ev) => {
+    const line = ev.data;
+    appendToTerminal(roleNum, line);
+    routeToParser(roleNum, line);
+  };
+
+  ws.onclose = () => {
+    if (btn) { btn.disabled = false; btn.classList.remove('running'); btn.textContent = '▶ Run Demo'; }
+    appendToTerminal(roleNum, '\n[Web UI] Process exited\n');
+    onRoleDone(roleNum);
+  };
+
+  ws.onerror = () => {
+    appendToTerminal(roleNum, 'ERROR: Could not connect to backend. Is server.py running?\n');
+  };
+}
+
+function resetRole(roleNum) {
+  if (ws) { ws.close(); ws = null; }
+  const termEl = terminalOutputs[roleNum] || document.querySelector('.terminal-output-' + roleNum);
+  if (termEl) termEl.innerHTML = '';
+  resetRoleViz(roleNum);
+  const btn = document.getElementById('btn-run-' + roleNum);
+  if (btn) { btn.disabled = false; btn.classList.remove('running'); btn.textContent = '▶ Run Demo'; }
+}
+
+function routeToParser(roleNum, line) {
+  switch (roleNum) {
+    case 1: parseRole1(line); break;
+    case 2: parseRole2(line); break;
+    case 3: parseRole3(line); break;
+    case 4: parseRole4(line); break;
+    case 5: parseRole5(line); break;
+  }
+}
+
+function onRoleDone(roleNum) {
+  if (roleNum === 5) diskComplete();
+}
+
+function resetRoleViz(roleNum) {
+  switch (roleNum) {
+    case 1: resetRole1Viz(); break;
+    case 2: resetRole2Viz(); break;
+    case 3: resetRole3Viz(); break;
+    case 4: resetRole4Viz(); break;
+    case 5: resetRole5Viz(); break;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ROLE 1 — ARCHITECTURE
+   ══════════════════════════════════════════════════════════════════════════ */
+const r1State = { current: null, hostPid: null };
+const STATE_ORDER = ['PENDING','CREATING','RUNNING','STOPPING','STOPPED','TERMINATED'];
+const NS_RINGS = ['PID','MNT','NET','UTS','IPC'];
+
+function r1SetState(stateName) {
+  const prev = r1State.current;
+  r1State.current = stateName;
+  STATE_ORDER.forEach(s => {
+    const el = document.getElementById('r1-' + s);
+    if (!el) return;
+    const idx = STATE_ORDER.indexOf(s);
+    const curIdx = STATE_ORDER.indexOf(stateName);
+    el.className = 'state-node' + (s === stateName ? ' active' : idx < curIdx ? ' done' : '');
+  });
+  document.getElementById('r1-info').textContent =
+    `Container state: ${stateName}${r1State.hostPid ? ' (host PID ' + r1State.hostPid + ')' : ''}`;
+}
+
+function r1ShowRings() {
+  NS_RINGS.forEach((ns, i) => {
+    setTimeout(() => {
+      const el = document.getElementById('r1-ring-' + ns.toLowerCase());
+      if (el) el.classList.add('visible');
+    }, i * 120);
+  });
+}
+
+function parseRole1(line) {
+  let m;
+  m = line.match(/state=(CREATING|RUNNING|STOPPING|STOPPED|TERMINATED)/);
+  if (m) { r1SetState(m[1]); if (m[1] === 'CREATING') r1ShowRings(); return; }
+
+  m = line.match(/PID inside namespace = (\d+)/);
+  if (m) {
+    document.getElementById('r1-ns-center').innerHTML =
+      `Container<br/><span style="font-size:11px">PID ${m[1]} inside ✓</span>`;
+    return;
+  }
+  m = line.match(/pid=(\d+) state=RUNNING/);
+  if (m) { r1State.hostPid = m[1]; document.getElementById('r1-host-pid').textContent = 'PID ' + m[1]; return; }
+}
+
+function resetRole1Viz() {
+  r1State.current = null; r1State.hostPid = null;
+  STATE_ORDER.forEach(s => { const el = document.getElementById('r1-' + s); if (el) el.className = 'state-node'; });
+  NS_RINGS.forEach(ns => { const el = document.getElementById('r1-ring-' + ns.toLowerCase()); if (el) el.classList.remove('visible'); });
+  document.getElementById('r1-info').textContent = 'Waiting for demo to run…';
+  document.getElementById('r1-host-pid').textContent = 'PID ???';
+  document.getElementById('r1-ns-center').innerHTML = 'Container<br/><span style="font-size:10px;opacity:0.8">initializing…</span>';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ROLE 2 — MEMORY & STORAGE
+   ══════════════════════════════════════════════════════════════════════════ */
+const r2State = { maxMb: 0, highMb: 0, curMb: 0 };
+
+function r2SetMem(cur, max, high) {
+  if (max) { r2State.maxMb = max; document.getElementById('r2-mem-max-label').textContent = max + ' MB (max)'; }
+  if (high) { r2State.highMb = high; document.getElementById('r2-mem-high-label').textContent = 'High: ' + high + ' MB'; }
+  if (cur !== null) { r2State.curMb = cur; }
+  const pct = r2State.maxMb ? Math.min(100, (r2State.curMb / r2State.maxMb) * 100) : 0;
+  const highPct = r2State.maxMb && r2State.highMb ? (r2State.highMb / r2State.maxMb * 100) : 80;
+  const bar = document.getElementById('r2-membar');
+  const highThresh = document.getElementById('r2-thresh-high');
+  if (bar) { bar.style.width = pct + '%'; bar.textContent = r2State.curMb + ' MB'; }
+  if (highThresh) highThresh.style.left = highPct + '%';
+}
+
+function parseRole2(line) {
+  let m;
+  m = line.match(/memory\.max = (\d+) MB/);
+  if (m) { r2SetMem(null, parseInt(m[1]), null); return; }
+
+  m = line.match(/memory\.high = (\d+)\s*bytes/);
+  if (m) { r2SetMem(null, null, Math.round(parseInt(m[1]) / 1024 / 1024)); return; }
+
+  if (line.includes('Overlay mounted at')) {
+    ['r2-layer-lower','r2-layer-upper','r2-layer-merged'].forEach((id, i) => {
+      setTimeout(() => { const el = document.getElementById(id); if (el) el.classList.add('visible'); }, i * 300);
+    });
+    document.getElementById('r2-mount-root').classList.add('visible');
+    return;
+  }
+  if (line.includes('/proc mounted')) { document.getElementById('r2-mount-proc').classList.add('visible'); return; }
+  if (line.includes('/tmp mounted'))  { document.getElementById('r2-mount-tmp').classList.add('visible');  return; }
+  if (line.includes('/dev mounted'))  { document.getElementById('r2-mount-dev').classList.add('visible');  return; }
+
+  m = line.match(/memory\.current = (\d+)/);
+  if (m) { r2SetMem(Math.round(parseInt(m[1]) / 1024 / 1024), null, null); }
+}
+
+function resetRole2Viz() {
+  r2State.maxMb = 0; r2State.highMb = 0; r2State.curMb = 0;
+  r2SetMem(0, 256, 204);
+  ['r2-layer-merged','r2-layer-upper','r2-layer-lower'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('visible'); });
+  ['r2-mount-root','r2-mount-proc','r2-mount-tmp','r2-mount-dev'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('visible'); });
+  document.getElementById('r2-mem-max-label').textContent = '— MB (max)';
+  document.getElementById('r2-mem-high-label').textContent = '— / —';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ROLE 3 — SCHEDULER
+   ══════════════════════════════════════════════════════════════════════════ */
+const r3State = { containers: {}, ticks: [], fairness: {} };
+const R3_COLORS = { 'sched-A':'#FF9A86', 'sched-B':'#FFB399', 'sched-C':'#FFD6A6' };
+let r3GanttPixel = 0;  // running pixel offset
+
+function r3EnsureRow(id) {
+  if (r3State.containers[id]) return;
+  r3State.containers[id] = { color: R3_COLORS[id] || '#FFB399', shares: 0, ticks: 0, el: null };
+  const gantt = document.getElementById('r3-gantt');
+  const row = document.createElement('div');
+  row.className = 'gantt-row';
+  row.id = 'r3-row-' + id;
+  row.innerHTML = `<div class="gantt-label">${id}</div><div class="gantt-track" id="r3-track-${id}"></div>`;
+  gantt.appendChild(row);
+  r3State.containers[id].el = document.getElementById('r3-track-' + id);
+}
+
+function r3AddTick(id) {
+  r3EnsureRow(id);
+  const c = r3State.containers[id];
+  if (!c) return;
+  c.ticks++;
+  const total = Object.values(r3State.containers).reduce((s, v) => s + v.ticks, 0);
+  const pct = (c.ticks / total) * 100;
+  // Update all bars proportionally
+  Object.entries(r3State.containers).forEach(([cid, cv]) => {
+    const track = document.getElementById('r3-track-' + cid);
+    if (!track) return;
+    const thisPct = (cv.ticks / total) * 100;
+    // Find or create the fill block
+    let block = track.querySelector('.gantt-block');
+    if (!block) {
+      block = document.createElement('div');
+      block.className = 'gantt-block';
+      block.style.background = cv.color;
+      block.style.left = '0';
+      track.appendChild(block);
+    }
+    block.style.width = thisPct + '%';
+    block.textContent = cv.ticks + ' ticks';
+  });
+}
+
+function r3UpdateFairness(lines) {
+  const tbody = document.getElementById('r3-fairness-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  Object.entries(r3State.fairness).forEach(([id, d]) => {
+    const ok = Math.abs(d.expected - d.actual) < 5;
+    tbody.innerHTML += `<tr>
+      <td style="font-weight:600">${id}</td>
+      <td>${d.shares}</td>
+      <td>${d.weight || '—'}</td>
+      <td>${d.expected ? d.expected.toFixed(1)+'%' : '—'}</td>
+      <td>${d.actual ? d.actual.toFixed(1)+'%' : '—'}</td>
+      <td><span style="font-size:11px;font-weight:700;color:${ok ? 'var(--success)' : 'var(--danger)'}">${ok ? '✓ FAIR' : '✗ SKEW'}</span></td>
+    </tr>`;
+  });
+}
+
+function parseRole3(line) {
+  let m;
+  m = line.match(/Added container (\S+) with (\d+) shares/);
+  if (m) { r3EnsureRow(m[1]); r3State.containers[m[1]].shares = parseInt(m[2]); r3State.fairness[m[1]] = { shares: parseInt(m[2]) }; return; }
+
+  m = line.match(/cpu\.weight = (\d+) \(from (\d+) shares\)/);
+  if (m) {
+    // find which container this belongs to from recent output
+    const id = Object.keys(r3State.fairness).slice(-1)[0];
+    if (id && r3State.fairness[id]) r3State.fairness[id].weight = m[1];
+    return;
+  }
+
+  m = line.match(/Tick \d+ → Schedule: (\S+)/);
+  if (m) { r3AddTick(m[1]); return; }
+
+  // Fairness table: try to match table rows
+  m = line.match(/│\s*(sched-\w+)\s+│\s+(\d+)\s+│\s+([\d.]+)%\s+│\s+([\d.]+)%\s+│/);
+  if (m) {
+    const id = m[1].trim();
+    if (!r3State.fairness[id]) r3State.fairness[id] = {};
+    r3State.fairness[id].shares = parseInt(m[2]);
+    r3State.fairness[id].expected = parseFloat(m[3]);
+    r3State.fairness[id].actual = parseFloat(m[4]);
+    r3UpdateFairness();
+    return;
+  }
+}
+
+function resetRole3Viz() {
+  r3State.containers = {}; r3State.ticks = []; r3State.fairness = {};
+  const gantt = document.getElementById('r3-gantt');
+  if (gantt) gantt.innerHTML = '';
+  const tbody = document.getElementById('r3-fairness-body');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">Run the demo to see fairness data</td></tr>';
+  const info = document.getElementById('r3-cgroup-info');
+  if (info) info.textContent = 'Run demo to see cpu.weight and cpu.max configuration…';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ROLE 4 — BANKER'S + SEMAPHORE
+   ══════════════════════════════════════════════════════════════════════════ */
+const r4State = {
+  n: 0, m: 0,
+  available: [],
+  max: [], allocation: [], need: [],
+  lastRequest: null,
+};
+
+function r4EnsureMatrix(n, m) {
+  if (r4State.n === n && r4State.m === m) return;
+  r4State.n = n; r4State.m = m;
+  r4State.max        = Array.from({length:n}, () => Array(m).fill(0));
+  r4State.allocation = Array.from({length:n}, () => Array(m).fill(0));
+  r4State.need       = Array.from({length:n}, () => Array(m).fill(0));
+}
+
+function r4RenderMatrix() {
+  const tbody = document.getElementById('r4-matrix-body');
+  if (!tbody || r4State.n === 0) return;
+  tbody.innerHTML = '';
+  for (let c = 0; c < r4State.n; c++) {
+    tbody.innerHTML += `<tr id="r4-row-${c}">
+      <td style="font-weight:700;color:var(--text-secondary)">C${c}</td>
+      <td id="r4-max-${c}">${r4State.max[c].join(' ')}</td>
+      <td id="r4-alloc-${c}">${r4State.allocation[c].join(' ')}</td>
+      <td id="r4-need-${c}">${r4State.need[c].join(' ')}</td>
+    </tr>`;
+  }
+  const avEl = document.getElementById('r4-avail-display');
+  if (avEl) avEl.textContent = r4State.available.join('  ');
+}
+
+function r4Flash(cellId, cls) {
+  const el = document.getElementById(cellId);
+  if (!el) return;
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), 1200);
+}
+
+function r4UpdateFromRow(idx, maxArr, allocArr, needArr) {
+  r4State.max[idx]        = maxArr;
+  r4State.allocation[idx] = allocArr;
+  r4State.need[idx]       = needArr;
+  r4RenderMatrix();
+}
+
+function r4AddDecision(html) {
+  const log = document.getElementById('r4-decision-log');
+  if (!log) return;
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  div.style.marginBottom = '6px';
+  log.insertBefore(div, log.firstChild);
+}
+
+function r4ShowSafeSeq(seqStr) {
+  const el = document.getElementById('r4-safe-seq');
+  if (!el) return;
+  const parts = seqStr.trim().split(/\s+/).filter(s => s.startsWith('C'));
+  el.innerHTML = parts.map((p, i) =>
+    `<span class="safe-step" style="animation-delay:${i*0.1}s">${p}</span>` +
+    (i < parts.length - 1 ? '<span class="safe-arrow">→</span>' : '')
+  ).join('');
+}
+
+function r4UpdateSemaphore(container, action) {
+  const key = container.endsWith('-A') || container === 'container-A' ? 'A' : 'B';
+  const el    = document.getElementById('r4-sem-' + key);
+  const stEl  = document.getElementById('r4-sem-' + key + '-status');
+  const icon  = el.querySelector('.sem-icon');
+  if (!el) return;
+  el.className = 'sem-container ' + (action === 'acquired' ? 'holding' : action === 'waiting' ? 'waiting' : 'idle');
+  if (icon) icon.textContent = action === 'acquired' ? '🔐' : action === 'waiting' ? '⏳' : '🔓';
+  if (stEl) stEl.textContent = action;
+  if (stEl) stEl.style.color = action === 'acquired' ? 'var(--success)' : action === 'waiting' ? 'var(--warning)' : 'var(--text-muted)';
+}
+
+function parseRole4(line) {
+  let m;
+
+  m = line.match(/Initialized: (\d+) containers, (\d+) resource types/);
+  if (m) { r4EnsureMatrix(parseInt(m[1]), parseInt(m[2])); return; }
+
+  m = line.match(/Available resources: ([\d ]+)/);
+  if (m) { r4State.available = m[1].trim().split(/\s+/).map(Number); r4RenderMatrix(); return; }
+
+  // Parse matrix row: │ C0    │ 4   2   2   ...  │ 1   0   0 ...  │ 3   2   2 ... │
+  m = line.match(/│\s*C(\d+)\s+│([^│]+)│([^│]+)│([^│]+)/);
+  if (m) {
+    const parseNums = s => s.trim().split(/\s+/).filter(x => x && !isNaN(Number(x))).map(Number);
+    const idx = parseInt(m[1]);
+    r4EnsureMatrix(Math.max(r4State.n, idx + 1), 4);
+    r4UpdateFromRow(idx, parseNums(m[2]), parseNums(m[3]), parseNums(m[4]));
+    return;
+  }
+
+  m = line.match(/State is SAFE\. Safe sequence: (.+)/);
+  if (m) { r4ShowSafeSeq(m[1]); return; }
+
+  m = line.match(/State is UNSAFE/);
+  if (m) {
+    r4AddDecision('<div class="decision-badge badge-denied">✗ UNSAFE STATE — request would cause deadlock</div>');
+    return;
+  }
+
+  m = line.match(/GRANTED: C(\d+) request approved/);
+  if (m) {
+    r4AddDecision(`<div class="decision-badge badge-granted">✓ GRANTED — C${m[1]} request approved</div>`);
+    r4Flash('r4-alloc-' + m[1], 'cell-highlight-green');
+    return;
+  }
+
+  m = line.match(/DENIED: granting would cause unsafe state/);
+  if (m) {
+    r4AddDecision('<div class="decision-badge badge-denied">✗ DENIED — would cause unsafe state</div>');
+    return;
+  }
+
+  m = line.match(/Available now: ([\d ]+)/);
+  if (m) { r4State.available = m[1].trim().split(/\s+/).map(Number); r4RenderMatrix(); return; }
+
+  m = line.match(/\[semaphore\] (\S+) (acquired|released|waiting)/);
+  if (m) { r4UpdateSemaphore(m[1], m[2]); return; }
+}
+
+function resetRole4Viz() {
+  r4State.n = 0; r4State.m = 0;
+  r4State.available = []; r4State.max = []; r4State.allocation = []; r4State.need = [];
+  const tbody = document.getElementById('r4-matrix-body');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:20px">Run the demo to see allocation state</td></tr>';
+  const avEl = document.getElementById('r4-avail-display');
+  if (avEl) avEl.textContent = '—';
+  const log = document.getElementById('r4-decision-log');
+  if (log) log.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Decisions will appear here as requests are processed…</div>';
+  const seq = document.getElementById('r4-safe-seq');
+  if (seq) seq.innerHTML = '<span style="color:var(--text-muted);font-size:12px">Computed after each safety check…</span>';
+  ['A','B'].forEach(k => {
+    const el = document.getElementById('r4-sem-' + k);
+    const st = document.getElementById('r4-sem-' + k + '-status');
+    if (el) { el.className = 'sem-container idle'; el.querySelector('.sem-icon').textContent = '🔓'; }
+    if (st) { st.textContent = 'idle'; st.style.color = 'var(--text-muted)'; }
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ROLE 5 — MONITORING + DISK SCHEDULING
+   ══════════════════════════════════════════════════════════════════════════ */
+const r5State = {
+  activeTest: 0,
+  diskStart: 53,
+  diskMax: 199,
+  requests: {},        // { 'A': [98,183,...], 'B': [...] }
+  currentAlgo: 0,      // 1=FCFS, 2=SSTF, 3=SCAN, 4=CSCAN
+  sequences: {},       // { fcfs: [], sstf: [], scan: [], cscan: [] }
+  seeks: {},           // { fcfs: 0, ... }
+  algoMap: {1:'fcfs', 2:'sstf', 3:'scan', 4:'cscan'},
+  comparisonChart: null,
+};
+
+const DISK_CONTAINER_COLORS = {
+  'A':'#FF9A86', 'B':'#FFB399', 'C':'#FFD6A6', 'D':'#C47A55', 'E':'#E8942A'
+};
+const ALGO_COLORS = { fcfs:'#D94F35', sstf:'#C47A20', scan:'#2D9A4E', cscan:'#5050B0' };
+
+function cylToPercent(cyl) {
+  return (cyl / r5State.diskMax) * 100;
+}
+
+function r5SetTest(num, state, result) {
+  const item  = document.getElementById('r5-test-' + num);
+  const resEl = document.getElementById('r5-test-' + num + '-result');
+  if (item)  item.className  = 'test-item ' + state;
+  if (resEl && result) resEl.textContent = result;
+  const ind = item?.querySelector('.test-indicator');
+  if (ind) ind.textContent = state === 'passed' ? '✓' : state === 'failed' ? '✗' : '●';
+}
+
+function r5RenderRequestDots(rulerId) {
+  const ruler = document.getElementById('r5-ruler-' + rulerId);
+  if (!ruler) return;
+  // Remove old dots
+  ruler.querySelectorAll('.req-dot').forEach(d => d.remove());
+  Object.entries(r5State.requests).forEach(([letter, cyls]) => {
+    const color = DISK_CONTAINER_COLORS[letter] || '#FFB399';
+    cyls.forEach(cyl => {
+      const dot = document.createElement('div');
+      dot.className = 'req-dot';
+      dot.style.left = cylToPercent(cyl) + '%';
+      dot.style.background = color;
+      dot.title = `container-${letter}: cylinder ${cyl}`;
+      ruler.appendChild(dot);
+    });
+  });
+  // Add ruler tick labels
+  [0, 50, 100, 150, 199].forEach(cyl => {
+    if (ruler.querySelector(`[data-lbl="${cyl}"]`)) return;
+    const lbl = document.createElement('div');
+    lbl.className = 'ruler-label';
+    lbl.style.left = cylToPercent(cyl) + '%';
+    lbl.textContent = cyl;
+    lbl.dataset.lbl = cyl;
+    ruler.appendChild(lbl);
+  });
+}
+
+function r5RenderLegend() {
+  const legend = document.getElementById('r5-disk-legend');
+  if (!legend) return;
+  legend.innerHTML = Object.entries(r5State.requests).map(([letter, cyls]) => {
+    const c = DISK_CONTAINER_COLORS[letter] || '#FF9A86';
+    return `<span class="legend-dot" style="--dot-color:${c}">container-${letter} (${cyls.length} reqs)</span>`;
+  }).join('');
+}
+
+function r5AnimateAlgo(algoKey) {
+  const seq = r5State.sequences[algoKey];
+  if (!seq || seq.length === 0) return;
+  const ruler = document.getElementById('r5-ruler-' + algoKey);
+  if (!ruler) return;
+
+  // Remove old head
+  ruler.querySelectorAll('.head-marker,.trail-segment').forEach(e => e.remove());
+
+  const head = document.createElement('div');
+  head.className = 'head-marker';
+  head.style.left = cylToPercent(r5State.diskStart) + '%';
+  ruler.appendChild(head);
+
+  const color = ALGO_COLORS[algoKey] || '#FF9A86';
+  const seekEl = document.getElementById('r5-seek-' + algoKey);
+
+  let i = 0;
+  let total = 0;
+  let prevCyl = r5State.diskStart;
+
+  function step() {
+    if (i >= seq.length) {
+      r5State.seeks[algoKey] = total;
+      checkAllDone();
+      return;
+    }
+    const cyl = seq[i];
+    // Trail segment
+    const seg = document.createElement('div');
+    seg.className = 'trail-segment';
+    seg.style.background = color;
+    const fromPct = cylToPercent(prevCyl);
+    const toPct   = cylToPercent(cyl);
+    seg.style.left  = Math.min(fromPct, toPct) + '%';
+    seg.style.width = Math.abs(toPct - fromPct) + '%';
+    ruler.insertBefore(seg, head);
+
+    // Move head
+    head.style.left = cylToPercent(cyl) + '%';
+    total += Math.abs(cyl - prevCyl);
+    if (seekEl) seekEl.textContent = total;
+    prevCyl = cyl;
+    i++;
+    setTimeout(step, 200);
+  }
+  step();
+}
+
+function checkAllDone() {
+  const all = ['fcfs','sstf','scan','cscan'];
+  if (all.every(k => r5State.seeks[k] !== undefined)) {
+    // All 4 done — show comparison
+    setTimeout(showDiskComparison, 400);
+  }
+}
+
+function diskComplete() {
+  checkAllDone();
+}
+
+function showDiskComparison() {
+  const card = document.getElementById('r5-comparison-chart-card');
+  if (card) card.style.display = 'block';
+
+  // Best label on best algorithm
+  const sorted = Object.entries(r5State.seeks).sort((a,b) => a[1]-b[1]);
+  if (sorted[0]) {
+    const bestKey = sorted[0][0];
+    const lane = document.getElementById('r5-lane-' + bestKey);
+    if (lane && !lane.classList.contains('best')) {
+      lane.classList.add('best');
+      const hdr = lane.querySelector('.algo-lane-header');
+      if (hdr) hdr.insertAdjacentHTML('beforeend', '<span class="best-badge">⭐ Best Throughput</span>');
+    }
+  }
+
+  const ctx = document.getElementById('r5-comparison-chart');
+  if (!ctx) return;
+  if (r5State.comparisonChart) r5State.comparisonChart.destroy();
+
+  r5State.comparisonChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['FCFS','SSTF','SCAN (Elevator)','C-SCAN'],
+      datasets: [{
+        label: 'Total Seek Distance (cylinders)',
+        data: ['fcfs','sstf','scan','cscan'].map(k => r5State.seeks[k] || 0),
+        backgroundColor: [
+          'rgba(217,79,53,0.65)','rgba(196,122,32,0.65)',
+          'rgba(45,154,78,0.65)','rgba(80,80,176,0.65)'
+        ],
+        borderColor: ['#D94F35','#C47A20','#2D9A4E','#5050B0'],
+        borderWidth: 2,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(255,179,153,0.20)' },
+          ticks: { font: { family: 'Inter' }, color: '#7A3E28' }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: 'Inter', weight: '600' }, color: '#7A3E28' }
+        }
+      }
+    }
+  });
+}
+
+function parseRole5(line) {
+  let m;
+
+  // Test activation
+  m = line.match(/\[TEST (\d+)\]/);
+  if (m) {
+    const num = parseInt(m[1]);
+    if (r5State.activeTest && r5State.activeTest < num) {
+      r5SetTest(r5State.activeTest, 'passed', '');
+    }
+    r5State.activeTest = num;
+    r5SetTest(num, 'active', '');
+    return;
+  }
+
+  // Test pass
+  m = line.match(/Result: (\d+)\/(\d+) passed/);
+  if (m) { r5SetTest(r5State.activeTest, parseInt(m[1]) === parseInt(m[2]) ? 'passed' : 'failed', `${m[1]}/${m[2]} ✓`); return; }
+
+  m = line.match(/Result: PASS/);
+  if (m) { r5SetTest(r5State.activeTest, 'passed', 'PASS ✓'); return; }
+
+  // Deadlocks = 0
+  m = line.match(/Deadlocks detected: (\d+)/);
+  if (m) { r5SetTest(5, 'passed', m[1] === '0' ? '0 deadlocks ✓' : m[1] + ' deadlocks'); return; }
+
+  // Startup latency
+  m = line.match(/Container \S+: (\d+)ms — PASS/);
+  if (m) { r5SetTest(1, 'active', m[1] + 'ms'); return; }
+
+  // Disk requests
+  m = line.match(/container-(\w+):\s*cylinders\s*\[([^\]]+)\]/);
+  if (m) {
+    const letter = m[1];
+    r5State.requests[letter] = m[2].split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    r5RenderLegend();
+    ['fcfs','sstf','scan','cscan'].forEach(k => r5RenderRequestDots(k));
+    return;
+  }
+
+  // Algorithm header
+  m = line.match(/--- Algorithm (\d+):/);
+  if (m) { r5State.currentAlgo = parseInt(m[1]); return; }
+
+  // Seek sequence
+  m = line.match(/Seek sequence:\s*(.+)/);
+  if (m) {
+    const algoKey = r5State.algoMap[r5State.currentAlgo];
+    if (algoKey) {
+      r5State.sequences[algoKey] = m[1].split('→').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+      // Render dots then animate
+      r5RenderRequestDots(algoKey);
+      r5AnimateAlgo(algoKey);
+    }
+    return;
+  }
+
+  // Total seek distance
+  m = line.match(/Total seek distance: (\d+) cylinders/);
+  if (m) {
+    const algoKey = r5State.algoMap[r5State.currentAlgo];
+    const seekEl  = document.getElementById('r5-seek-' + algoKey);
+    if (seekEl) seekEl.textContent = m[1];
+    if (algoKey) r5State.seeks[algoKey] = parseInt(m[1]);
+    return;
+  }
+}
+
+function resetRole5Viz() {
+  r5State.activeTest = 0;
+  r5State.requests = {}; r5State.sequences = {}; r5State.seeks = {}; r5State.currentAlgo = 0;
+  [1,2,3,4,5,6].forEach(n => r5SetTest(n, '', ''));
+  ['fcfs','sstf','scan','cscan'].forEach(k => {
+    const ruler = document.getElementById('r5-ruler-' + k);
+    if (ruler) { ruler.querySelectorAll('.req-dot,.head-marker,.trail-segment,.ruler-label').forEach(e => e.remove()); }
+    const seekEl = document.getElementById('r5-seek-' + k);
+    if (seekEl) seekEl.textContent = '0';
+    const lane = document.getElementById('r5-lane-' + k);
+    if (lane) { lane.classList.remove('best'); const b = lane.querySelector('.best-badge'); if(b) b.remove(); }
+  });
+  const legend = document.getElementById('r5-disk-legend');
+  if (legend) legend.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Request dots will appear when TEST 6 starts…</span>';
+  const card = document.getElementById('r5-comparison-chart-card');
+  if (card) card.style.display = 'none';
+  if (r5State.comparisonChart) { r5State.comparisonChart.destroy(); r5State.comparisonChart = null; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BOOT
+   ══════════════════════════════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', () => {
+  renderOverview(null);
+  loadStatus();
+  // Wire up terminal containers immediately for all roles
+  for (let i = 1; i <= 5; i++) {
+    const el = document.querySelector('.terminal-output-' + i);
+    if (el) { el.id = 'terminal-output-' + i; terminalOutputs[i] = el; }
+  }
+  resetRole2Viz(); // initialize memory bar with 0
+});
+</script>
+</body>
+</html>

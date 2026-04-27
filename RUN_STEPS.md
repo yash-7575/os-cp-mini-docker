@@ -6,6 +6,34 @@ Quick, copy-paste steps each team member runs during viva. Every command is run 
 
 ---
 
+## 🌐 Web Dashboard (Recommended for Viva)
+
+The project includes a beautiful web dashboard that streams live terminal output and shows real-time visualizations for all 5 roles — disk scheduling race animations, Banker's algorithm matrix, namespace rings, OverlayFS layers, and CPU Gantt charts.
+
+```bash
+# One-time install (requires Python 3.8+)
+pip install -r web/requirements.txt
+
+# Start the web server
+uvicorn web.server:app --host 0.0.0.0 --port 8080
+
+# Open in browser on Ubuntu:
+#   http://localhost:8080
+# From Windows (same WiFi):
+#   http://<ubuntu-ip>:8080
+```
+
+> **Role 4** (Banker's Algorithm) runs without sudo and is the safest demo to start with if you are setting up the machine.
+
+> The web server needs to be running as a **privileged user** (or with sudo) since it internally calls `sudo ./bin/roleX_demo` for roles 1/2/3/5:
+> ```bash
+> sudo uvicorn web.server:app --host 0.0.0.0 --port 8080
+> ```
+
+---
+
+## Terminal-only demo (fallback)
+
 ## Before anyone presents — one-time setup
 
 Run these **once** on the demo machine:
