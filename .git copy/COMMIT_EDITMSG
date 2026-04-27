@@ -1,0 +1,11 @@
+Improve all role implementations and add project docs
+
+- role1: fix memory management (stack/cargs stored in container_t, freed on destroy), handle already-exited processes gracefully, add root check
+- role2: implement recursive mkdir_p, fix overlay path construction, fix demo paths
+- role3/role5: add root privilege check in main()
+- role4: fix Banker's algorithm double-apply bug, clean up rollback logic, use consistent demo data that produces a valid safe state
+- container.h: add runtime_stack/runtime_args fields to container_t
+- Add RUN_STEPS.md, roles.md, os_syllabus.md, a.html
+- Update CLAUDE.md with setup instructions and implementation notes
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>

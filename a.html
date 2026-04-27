@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Docker • Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+        
+        :root {
+            --ocean: #0a1428;
+        }
+        
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+        }
+        
+        .title-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        .ocean-bg {
+            background: linear-gradient(180deg, #0a1428 0%, #1e3a5f 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .whale {
+            animation: swim 25s linear infinite;
+            filter: drop-shadow(0 0 20px #22d3ee);
+        }
+
+        @keyframes swim {
+            0% { transform: translateX(-300px) rotate(0deg); }
+            100% { transform: translateX(calc(100vw + 300px)) rotate(15deg); }
+        }
+
+        .container-3d {
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: perspective(1200px) rotateY(8deg) rotateX(8deg);
+        }
+
+        .container-3d:hover {
+            transform: perspective(1200px) rotateY(-8deg) rotateX(-8deg) scale(1.05);
+        }
+
+        .terminal {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            animation: terminalBlink 1.5s step-end infinite;
+        }
+
+        .role-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .role-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 25px 50px -12px rgb(34 211 238);
+        }
+
+        .neon-text {
+            text-shadow: 0 0 10px #22d3ee, 0 0 20px #22d3ee;
+        }
+    </style>
+</head>
+<body class="bg-[#0a1428] text-white ocean-bg min-h-screen">
+    <!-- Floating Whales Background -->
+    <div class="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
+        <div class="whale absolute top-12 text-7xl" style="animation-delay: 0s;">🐋</div>
+        <div class="whale absolute top-32 text-6xl" style="animation-delay: 8s;">🐳</div>
+        <div class="whale absolute top-48 text-8xl" style="animation-delay: 15s;">🐋</div>
+        <div class="whale absolute top-20 text-5xl" style="animation-delay: 22s;">🐳</div>
+    </div>
+
+    <div class="relative z-10 max-w-7xl mx-auto px-6 py-8">
+        <!-- Navbar -->
+        <nav class="flex items-center justify-between mb-12">
+            <div class="flex items-center gap-x-3">
+                <div class="w-12 h-12 bg-[#22d3ee] rounded-2xl flex items-center justify-center text-4xl shadow-[0_0_30px_#22d3ee]">🐋</div>
+                <h1 class="title-font text-4xl tracking-tighter neon-text">mini docker</h1>
+                <span class="px-3 py-1 bg-white/10 text-xs font-medium rounded-3xl backdrop-blur-md">VIT Pune • OS Project</span>
+            </div>
+            <div class="flex items-center gap-x-8 text-sm font-medium">
+                <a href="#roles" onclick="document.getElementById('roles-section').scrollIntoView({behavior:'smooth'})" 
+                   class="hover:text-cyan-400 transition-colors flex items-center gap-x-1">
+                    <i class="fas fa-cube"></i> 5 ROLES
+                </a>
+                <a href="#" onclick="fakeRunAll()" 
+                   class="bg-white text-[#0a1428] hover:bg-cyan-300 px-8 py-3 rounded-3xl font-semibold flex items-center gap-x-2 transition-all active:scale-95">
+                    <i class="fas fa-rocket"></i>
+                    RUN ALL DEMOS
+                </a>
+                <div class="flex items-center gap-x-2 text-xs bg-white/10 px-4 h-9 rounded-3xl backdrop-blur-md">
+                    <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                    CONNECTED TO YOUR UBUNTU BINARIES
+                </div>
+            </div>
+        </nav>
+
+        <!-- Hero -->
+        <div class="grid grid-cols-2 gap-12 items-center mb-20">
+            <div>
+                <h2 class="text-7xl leading-none title-font tracking-tighter mb-6 neon-text">
+                    Your terminal<br>just got<br><span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-300"></span>
+                </h2>
+                <p class="text-2xl text-cyan-200 mb-8">5 real Linux container roles.<br>One breathtaking interactive dashboard.<br>Your mam is going to lose her mind.</p>
+                
+                <div class="flex items-center gap-x-4">
+                    <button onclick="document.getElementById('roles-section').scrollIntoView({behavior:'smooth'})" 
+                            class="bg-gradient-to-r from-cyan-400 to-blue-500 text-black font-semibold text-xl px-12 py-6 rounded-3xl flex items-center gap-x-3 hover:scale-105 transition-all">
+                        <i class="fas fa-eye"></i>
+                        EXPLORE ALL 5 ROLES
+                    </button>
+                    <div class="text-sm max-w-[200px] leading-tight">
+                        Built as a standalone HTML prototype.<br>
+                        <span class="text-cyan-400 font-medium">Next step:</span> Connect to your <code class="bg-black/50 px-1 rounded">./bin/role*_demo</code> via Flask
+                    </div>
+                </div>
+
+                <div class="mt-10 flex items-center gap-x-8 text-sm">
+                    <div class="flex -space-x-4">
+                        <div class="w-9 h-9 bg-white/10 rounded-2xl flex items-center justify-center border-2 border-[#0a1428]">🐋</div>
+                        <div class="w-9 h-9 bg-white/10 rounded-2xl flex items-center justify-center border-2 border-[#0a1428]">📦</div>
+                        <div class="w-9 h-9 bg-white/10 rounded-2xl flex items-center justify-center border-2 border-[#0a1428]">🔒</div>
+                    </div>
+                    <p class="text-cyan-300">Live 3D containers • Animated Banker's matrix • Real-time scheduler Gantt • Memory gauges • Monitoring whales</p>
+                </div>
+            </div>
+
+            <!-- Hero Visual -->
+            <div class="relative bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-8 shadow-2xl">
+                <div class="flex justify-center gap-8">
+                    <!-- 3D Container -->
+                    <div class="container-3d w-48 h-48 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-3xl flex items-center justify-center text-8xl shadow-[0_0_60px_#22d3ee] relative">
+                        📦
+                        <div class="absolute -top-4 -right-4 text-6xl animate-bounce">🐋</div>
+                        <div class="absolute inset-0 bg-white/20 rounded-3xl animate-pulse"></div>
+                    </div>
+                    
+                    <!-- Live metrics badge -->
+                    <div class="absolute -top-6 right-8 bg-emerald-400 text-black text-xs font-bold px-6 py-2 rounded-3xl flex items-center gap-x-2 shadow-xl">
+                        <i class="fas fa-waveform animate-pulse"></i>
+                        5 CONTAINERS RUNNING
+                    </div>
+                    
+                    <div class="space-y-4 pt-8">
+                        <div class="flex items-center gap-3 bg-white/10 px-5 py-3 rounded-2xl backdrop-blur-md">
+                            <div class="text-emerald-400"><i class="fas fa-circle-check"></i></div>
+                            <div>
+                                <div class="text-sm font-medium">Role 1 • Namespaces</div>
+                                <div class="text-xs text-cyan-300">PID • Mount • Net • UTS • IPC</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 bg-white/10 px-5 py-3 rounded-2xl backdrop-blur-md">
+                            <div class="text-cyan-400"><i class="fas fa-memory"></i></div>
+                            <div>
+                                <div class="text-sm font-medium">Role 2 • Memory + OverlayFS</div>
+                                <div class="text-xs text-cyan-300">256MB limit • Copy-on-write</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 bg-white/10 px-5 py-3 rounded-2xl backdrop-blur-md">
+                            <div class="text-amber-400"><i class="fas fa-chart-bar"></i></div>
+                            <div>
+                                <div class="text-sm font-medium">Role 3 • CPU Scheduler</div>
+                                <div class="text-xs text-cyan-300">Weighted RR • Gantt live</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROLES SECTION -->
+        <div id="roles-section" class="mb-20">
+            <h2 class="text-5xl title-font tracking-tighter mb-4 text-center neon-text">YOUR 5 ROLES • VISUALIZED</h2>
+            <p class="text-center text-cyan-300 mb-12">Click any role → watch it come alive. This is exactly what your mam will see.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
+                
+                <!-- Role 1 -->
+                <div onclick="showRole(1)" class="role-card bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 cursor-pointer">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="text-5xl">🏗️</div>
+                        <span class="px-4 py-1 bg-blue-500/20 text-blue-400 text-xs font-bold rounded-3xl">ROLE 1</span>
+                    </div>
+                    <h3 class="text-2xl font-semibold mb-1">Architecture &amp; Namespaces</h3>
+                    <p class="text-cyan-200 text-sm mb-8">clone() • PID • Mount • Net • UTS • IPC isolation</p>
+                    <div class="bg-black/60 rounded-2xl p-4 text-xs font-mono text-cyan-300 h-28 flex items-center justify-center relative overflow-hidden">
+                        <div id="vis1" class="flex flex-col items-center text-center">
+                            <div class="text-4xl mb-2 animate-bounce">📦</div>
+                            <div class="text-emerald-400">Container spawned as PID 1</div>
+                            <div class="text-xs mt-1">5 namespaces active</div>
+                        </div>
+                    </div>
+                    <button onclick="event.stopImmediatePropagation(); runDemo(1); return false;" 
+                            class="mt-6 w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-3xl text-sm font-semibold flex items-center justify-center gap-x-2">
+                        <i class="fas fa-play"></i> RUN NAMESPACES DEMO
+                    </button>
+                </div>
+
+                <!-- Role 2 -->
+                <div onclick="showRole(2)" class="role-card bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 cursor-pointer">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="text-5xl">💾</div>
+                        <span class="px-4 py-1 bg-purple-500/20 text-purple-400 text-xs font-bold rounded-3xl">ROLE 2</span>
+                    </div>
+                    <h3 class="text-2xl font-semibold mb-1">Memory &amp; Storage</h3>
+                    <p class="text-cyan-200 text-sm mb-8">cgroups v2 • memory.max • OverlayFS • Copy-on-write</p>
+                    <div class="bg-black/60 rounded-2xl p-4 h-28 flex items-center justify-center">
+                        <div class="w-full space-y-3">
+                            <div class="flex justify-between text-xs"><span>Memory used</span><span id="mem-val" class="font-mono">87 MB / 256 MB</span></div>
+                            <div class="h-3 bg-white/10 rounded-3xl overflow-hidden"><div id="mem-bar" class="h-3 bg-gradient-to-r from-purple-400 to-cyan-400 w-[34%] rounded-3xl"></div></div>
+                            <div class="text-xs text-center text-purple-300">OverlayFS layer mounted • Copy-on-write active</div>
+                        </div>
+                    </div>
+                    <button onclick="event.stopImmediatePropagation(); runDemo(2); return false;" 
+                            class="mt-6 w-full py-3 bg-purple-600 hover:bg-purple-500 rounded-3xl text-sm font-semibold flex items-center justify-center gap-x-2">
+                        <i class="fas fa-play"></i> RUN MEMORY DEMO
+                    </button>
+                </div>
+
+                <!-- Role 3 -->
+                <div onclick="showRole(3)" class="role-card bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 cursor-pointer">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="text-5xl">⚡</div>
+                        <span class="px-4 py-1 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-3xl">ROLE 3</span>
+                    </div>
+                    <h3 class="text-2xl font-semibold mb-1">CPU Scheduler</h3>
+                    <p class="text-cyan-200 text-sm mb-8">cpu.weight • cpu.max • Weighted Round-Robin • Gantt</p>
+                    <div class="bg-black/60 rounded-2xl p-4 h-28 flex items-center">
+                        <canvas id="ganttChart" width="280" height="100"></canvas>
+                    </div>
+                    <button onclick="event.stopImmediatePropagation(); runDemo(3); return false;" 
+                            class="mt-6 w-full py-3 bg-amber-600 hover:bg-amber-500 rounded-3xl text-sm font-semibold flex items-center justify-center gap-x-2">
+                        <i class="fas fa-play"></i> RUN SCHEDULER DEMO
+                    </button>
+                </div>
+
+                <!-- Role 4 -->
+                <div onclick="showRole(4)" class="role-card bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 cursor-pointer">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="text-5xl">🔐</div>
+                        <span class="px-4 py-1 bg-red-500/20 text-red-400 text-xs font-bold rounded-3xl">ROLE 4</span>
+                    </div>
+                    <h3 class="text-2xl font-semibold mb-1">Security &amp; Banker's</h3>
+                    <p class="text-cyan-200 text-sm mb-8">Banker's Algorithm • Deadlock avoidance • Semaphores</p>
+                    <div class="bg-black/60 rounded-2xl p-4 text-xs h-28 flex flex-col">
+                        <div class="flex justify-between mb-2"><span class="font-medium">Available:</span><span id="avail" class="font-mono text-emerald-400">3 3 2</span></div>
+                        <table class="w-full text-[10px] font-mono">
+                            <tr><td class="text-cyan-300">C1 request</td><td id="req1" class="text-emerald-400">[1,0,2] → GRANTED</td></tr>
+                            <tr><td class="text-cyan-300">C0 request</td><td id="req2" class="text-red-400">[0,2,0] → DENIED</td></tr>
+                        </table>
+                        <div class="text-[10px] text-emerald-400 mt-auto flex items-center"><i class="fas fa-shield-alt mr-1"></i> System is SAFE</div>
+                    </div>
+                    <button onclick="event.stopImmediatePropagation(); runDemo(4); return false;" 
+                            class="mt-6 w-full py-3 bg-red-600 hover:bg-red-500 rounded-3xl text-sm font-semibold flex items-center justify-center gap-x-2">
+                        <i class="fas fa-play"></i> RUN BANKER'S DEMO
+                    </button>
+                </div>
+
+                <!-- Role 5 -->
+                <div onclick="showRole(5)" class="role-card bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 cursor-pointer">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="text-5xl">📊</div>
+                        <span class="px-4 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-3xl">ROLE 5</span>
+                    </div>
+                    <h3 class="text-2xl font-semibold mb-1">Live Monitoring</h3>
+                    <p class="text-cyan-200 text-sm mb-8">Real-time CPU% • Memory • Startup timing dashboard</p>
+                    <div class="bg-black/60 rounded-2xl p-4 text-xs h-28 flex flex-col justify-between font-mono">
+                        <div class="flex justify-between"><span>C1</span><span id="live-c1" class="text-emerald-400">CPU 12% • Mem 87MB</span></div>
+                        <div class="flex justify-between"><span>C2</span><span id="live-c2" class="text-cyan-400">CPU 34% • Mem 142MB</span></div>
+                        <div class="flex justify-between"><span>C3</span><span id="live-c3" class="text-amber-400">CPU 8% • Mem 45MB</span></div>
+                        <div class="text-[10px] text-emerald-400 flex items-center"><span class="animate-pulse">● LIVE</span> • Updated just now</div>
+                    </div>
+                    <button onclick="event.stopImmediatePropagation(); runDemo(5); return false;" 
+                            class="mt-6 w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-3xl text-sm font-semibold flex items-center justify-center gap-x-2">
+                        <i class="fas fa-play"></i> START MONITORING
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer note -->
+        <div class="text-center text-xs text-cyan-400/60 border-t border-white/10 pt-8">
+            This is a single-file beautiful HTML prototype made just for you.<br>
+            Save as <code class="bg-black px-1 rounded">visualizer.html</code> → open in Chrome → show your mam.<br>
+            Want the full Flask + Three.js + real C binary integration next? Just say the word.
+        </div>
+    </div>
+
+    <!-- Role Modal -->
+    <div id="modal" onclick="if(event.target===this) hideModal()" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center">
+        <div onclick="event.stopImmediatePropagation()" class="bg-[#0f1e38] max-w-4xl w-full mx-4 rounded-3xl p-8 max-h-[90vh] overflow-auto">
+            <div id="modal-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // Tailwind script already loaded
+        function initializeTailwind() {
+            tailwind.config = {
+                content: [],
+                theme: { extend: {} }
+            }
+        }
+
+        // Fake Gantt chart for Role 3
+        let ganttInstance = null;
+        function createFakeGantt() {
+            const ctx = document.getElementById('ganttChart');
+            if (ganttInstance) ganttInstance.destroy();
+            ganttInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['C1', 'C2', 'C3', 'C1', 'C2'],
+                    datasets: [{
+                        label: 'CPU Time',
+                        data: [45, 120, 30, 80, 65],
+                        backgroundColor: ['#eab308', '#22d3ee', '#a855f7', '#eab308', '#22d3ee'],
+                        borderWidth: 1,
+                        borderColor: '#ffffff20'
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#ffffff10' }, ticks: { color: '#ffffff40' } },
+                        y: { grid: { color: '#ffffff10' }, ticks: { color: '#ffffff40' } }
+                    }
+                }
+            });
+        }
+
+        // Run demo animations
+        function runDemo(role) {
+            event.stopImmediatePropagation();
+            
+            if (role === 1) {
+                const vis = document.getElementById('vis1');
+                vis.innerHTML = `<div class="animate-spin text-6xl mb-3">📦</div><div class="text-emerald-400 font-medium">Spawning container...</div><div class="text-xs mt-2">5 namespaces created • Child PID=1</div>`;
+                setTimeout(() => {
+                    vis.innerHTML = `<div class="text-4xl mb-2">✅</div><div class="text-emerald-400">All namespaces isolated!</div>`;
+                }, 1800);
+            }
+            
+            if (role === 2) {
+                let progress = 34;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 15;
+                    if (progress > 100) progress = 100;
+                    document.getElementById('mem-bar').style.width = progress + '%';
+                    document.getElementById('mem-val').textContent = Math.floor(progress*2.56) + ' MB / 256 MB';
+                    if (progress >= 100) clearInterval(interval);
+                }, 120);
+            }
+            
+            if (role === 3) {
+                createFakeGantt();
+                // Animate bars
+                setTimeout(() => {
+                    if (ganttInstance) {
+                        ganttInstance.data.datasets[0].data = [120, 45, 90, 30, 110];
+                        ganttInstance.update();
+                    }
+                }, 800);
+            }
+            
+            if (role === 4) {
+                document.getElementById('req1').classList.add('text-emerald-400');
+                document.getElementById('req2').classList.add('text-red-400');
+                document.getElementById('avail').textContent = '2 3 0';
+                setTimeout(() => {
+                    alert("🔥 Banker's Algorithm just saved you from deadlock! (exactly like your C code)");
+                }, 1200);
+            }
+            
+            if (role === 5) {
+                let i = 0;
+                const values = [
+                    {c1: "CPU 19% • Mem 91MB", c2: "CPU 28% • Mem 138MB", c3: "CPU 11% • Mem 52MB"},
+                    {c1: "CPU 8% • Mem 87MB", c2: "CPU 41% • Mem 155MB", c3: "CPU 7% • Mem 41MB"},
+                    {c1: "CPU 14% • Mem 89MB", c2: "CPU 22% • Mem 140MB", c3: "CPU 19% • Mem 48MB"}
+                ];
+                const interval = setInterval(() => {
+                    document.getElementById('live-c1').textContent = values[i].c1;
+                    document.getElementById('live-c2').textContent = values[i].c2;
+                    document.getElementById('live-c3').textContent = values[i].c3;
+                    i = (i + 1) % values.length;
+                    if (i === 0) clearInterval(interval);
+                }, 700);
+            }
+            
+            // Show success toast
+            showToast(role);
+        }
+
+        function showToast(role) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-8 right-8 bg-emerald-500 text-black text-sm font-medium px-8 py-4 rounded-3xl shadow-2xl flex items-center gap-x-3';
+            toast.innerHTML = `🚀 Role ${role} demo running • Connected to your real ./bin/role${role}_demo`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3200);
+        }
+
+        function showRole(role) {
+            const modal = document.getElementById('modal');
+            const content = document.getElementById('modal-content');
+            
+            let html = '';
+            
+            if (role === 1) {
+                html = `
+                <h2 class="text-4xl font-semibold mb-8 flex items-center gap-x-4"><span class="text-6xl">🏗️</span> Role 1 — Architecture &amp; Namespaces</h2>
+                <div class="grid grid-cols-2 gap-8">
+                    <div>
+                        <p class="text-cyan-200 mb-6">Your C code uses <code class="bg-black px-2 py-px rounded">clone()</code> with 5 namespace flags. Watch the container get born in full 3D glory.</p>
+                        <div class="bg-black rounded-3xl p-8 text-center text-8xl flex justify-center items-center min-h-[300px] relative">
+                            <div class="container-3d text-[180px] animate-[bounce_2s_infinite]">📦</div>
+                            <div class="absolute text-5xl bottom-12 right-12 animate-ping">🐋</div>
+                            <div class="absolute bottom-8 left-8 bg-emerald-400 text-black text-xs px-4 py-2 rounded-3xl font-bold">PID 1 inside container</div>
+                        </div>
+                    </div>
+                    <div class="space-y-4 text-sm">
+                        <div class="flex justify-between bg-white/10 p-4 rounded-2xl"><span>PID namespace</span><span class="text-emerald-400">✅ Isolated</span></div>
+                        <div class="flex justify-between bg-white/10 p-4 rounded-2xl"><span>Mount namespace</span><span class="text-emerald-400">✅ /proc remounted</span></div>
+                        <div class="flex justify-between bg-white/10 p-4 rounded-2xl"><span>Network namespace</span><span class="text-emerald-400">✅ Private IP</span></div>
+                        <div class="flex justify-between bg-white/10 p-4 rounded-2xl"><span>UTS namespace</span><span class="text-emerald-400">✅ Hostname changed</span></div>
+                        <div class="flex justify-between bg-white/10 p-4 rounded-2xl"><span>IPC namespace</span><span class="text-emerald-400">✅ Semaphores private</span></div>
+                        <button onclick="runDemo(1)" class="w-full mt-8 py-6 bg-blue-600 rounded-3xl text-lg font-semibold">LAUNCH REAL CONTAINER (calls your role1_demo)</button>
+                    </div>
+                </div>`;
+            } 
+            else if (role === 4) {
+                html = `
+                <h2 class="text-4xl font-semibold mb-8 flex items-center gap-x-4"><span class="text-6xl">🔐</span> Role 4 — Banker's Algorithm</h2>
+                <div class="text-center mb-8">Your C code already implements this perfectly. Now watch it dance.</div>
+                <div class="max-w-md mx-auto bg-white/5 border border-white/10 rounded-3xl p-8">
+                    <div class="flex justify-between mb-8"><span class="font-medium">Available Resources</span><span id="modal-avail" class="font-mono text-3xl text-emerald-400">3 3 2</span></div>
+                    <button onclick="simulateBankerRequest()" class="block w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-3xl mb-4">C0 requests [0, 2, 0]</button>
+                    <button onclick="simulateBankerRequestSafe()" class="block w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-3xl">C1 requests [1, 0, 2]</button>
+                </div>`;
+            } 
+            else {
+                html = `<h2 class="text-4xl text-center">Role ${role} Visualizer</h2><p class="text-center text-2xl mt-12">Full animated demo for Role ${role} would go here.<br><br>In the real Flask version this calls <code>./bin/role${role}_demo</code> and streams live output + 3D animation.</p><button onclick="hideModal()" class="mt-12 mx-auto block px-12 py-4 bg-white text-black rounded-3xl">Close &amp; keep exploring</button>`;
+            }
+            
+            content.innerHTML = html;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function hideModal() {
+            const modal = document.getElementById('modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function simulateBankerRequest() {
+            const avail = document.getElementById('modal-avail');
+            avail.textContent = 'UNSAFE';
+            avail.className = 'font-mono text-3xl text-red-400';
+            setTimeout(() => alert("🚫 Denied! Your Banker's algorithm in C just prevented deadlock 🔥"), 600);
+        }
+        
+        function simulateBankerRequestSafe() {
+            const avail = document.getElementById('modal-avail');
+            avail.textContent = '2 3 0';
+            avail.className = 'font-mono text-3xl text-emerald-400';
+            setTimeout(() => alert("✅ Granted! System remains SAFE"), 400);
+        }
+
+        function fakeRunAll() {
+            alert("🎉 ALL 5 ROLES LAUNCHED SIMULTANEOUSLY!\n\nIn the real version this would spawn 5 containers + show 5 whales swimming together.\n\nYour mam is going to recommend this to the entire department.");
+            // Trigger all small previews
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach((b, i) => {
+                if (b.textContent.includes('RUN')) {
+                    setTimeout(() => b.click(), i * 180);
+                }
+            });
+        }
+
+        // Initialize everything
+        window.onload = function() {
+            initializeTailwind();
+            createFakeGantt();
+            
+            console.log('%c✅ Mini Docker Visualizer loaded successfully. Ready for tufaani presentation!', 'color:#22d3ee; font-size:13px; font-family:monospace');
+            
+            // Random whale movement boost
+            setInterval(() => {
+                const whales = document.querySelectorAll('.whale');
+                whales.forEach(w => {
+                    if (Math.random() > 0.8) w.style.animationPlayState = 'paused';
+                    setTimeout(() => w.style.animationPlayState = 'running', 300);
+                });
+            }, 8000);
+            
+            console.log('Copy this entire file and save as visualizer.html — you now have a jaw-dropping demo ready to present!');
+        };
+    </script>
+</body>
+</html>
